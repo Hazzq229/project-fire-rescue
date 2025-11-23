@@ -70,7 +70,7 @@ namespace HPlayer
         private void UpdateInput()
         {
             // Input System lama (bisa diganti New Input System sesuai script sebelumnya)
-            bool interacting = Input.GetMouseButton(0); 
+            bool interacting = Input.GetMouseButton(0);
             
             if (interacting != Interacting)
             {
@@ -79,6 +79,14 @@ namespace HPlayer
                     OnInteractionStart?.Invoke();
                 else
                     OnInteractionEnd?.Invoke();
+            }
+
+            if (Input.GetMouseButtonDown(1)) 
+            {
+                if (HeldObject is HGame.Objects.HoseNozzle nozzle)
+                {
+                    nozzle.ToggleShooting();
+                }
             }
         }
 
