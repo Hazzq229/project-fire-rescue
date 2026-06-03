@@ -1,21 +1,22 @@
 using UnityEngine;
 using HInteractions;
+using UnityEngine.VFX;
 
 namespace HGame.Objects
 {
     public class HoseNozzle : Liftable
     {
         [Header("Hose Settings")]
-        [SerializeField] private GameObject waterParticleVFX; // Assign partikel air di sini
-        [SerializeField] private float shootRecoilForce = 5f;
+        [SerializeField] private VisualEffect _waterFX; // Assign partikel air di sini
+        [SerializeField] private float _shootRecoilForce = 5f;
 
         private bool _isShooting = false;
 
         protected override void Awake()
         {
             base.Awake();
-            maxHolders = 1; // Selang cuma bisa dipegang 1 orang
-            if (waterParticleVFX) waterParticleVFX.SetActive(false);
+            maxHolders = 1;
+            if (_waterFX) _waterFX.Stop();
         }
 
         protected override void OnFirstPickup()
@@ -32,12 +33,11 @@ namespace HGame.Objects
 
         protected override void OnAllDropped()
         {
-            Rigidbody.useGravity = true;
-            Rigidbody.interpolation = RigidbodyInterpolation.None;
-            SetShooting(false); // Matikan air kalau jatuh
+            base.OnAllDropped();
+            SetShooting(false);
         }
 
-        // Fungsi yang bisa dipanggil PlayerController lewat Input
+        // function to be called by player controller
         public void ToggleShooting()
         {
             if (!IsLifted) return;
@@ -47,7 +47,17 @@ namespace HGame.Objects
         public void SetShooting(bool state)
         {
             _isShooting = state;
-            if (waterParticleVFX) waterParticleVFX.SetActive(state);
+            if (_waterFX)
+            {
+                if(state)
+                {
+                    _waterFX.Play();
+                }
+                else
+                {
+                    _waterFX.Stop();
+                }
+            }
         }
 
         private void FixedUpdate()
@@ -55,7 +65,7 @@ namespace HGame.Objects
             // Efek dorongan ke belakang saat nembak air
             if (_isShooting && IsLifted)
             {
-                Rigidbody.AddForce(-transform.forward * shootRecoilForce, ForceMode.Force);
+                Rigidbody.AddForce(-transform.forward * _shootRecoilForce, ForceMode.Force);
             }
         }
     }
