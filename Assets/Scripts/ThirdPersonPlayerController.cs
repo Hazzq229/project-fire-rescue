@@ -23,6 +23,10 @@ public class ThirdPersonPlayerController : MonoBehaviour
     private Vector2 _inputVector;
     private bool _isMoving;
 
+    // --- TAMBAHAN UNTUK CAMERA-RELATIVE ---
+    private Vector3 _currentMoveDirection;
+    private Transform _mainCameraTransform; // Cache camera transform biar lebih ringan
+
     private void Awake()
     {
         _playerInput = new InputSystem_Actions();
@@ -34,6 +38,12 @@ public class ThirdPersonPlayerController : MonoBehaviour
         _rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
 
         if (_animator == null) _animator = GetComponentInChildren<Animator>();
+        
+        // Cache main camera di awal
+        if (Camera.main != null)
+            _mainCameraTransform = Camera.main.transform;
+        else
+            Debug.LogWarning("Main Camera tidak ditemukan! Pastikan objek kamera memiliki tag 'MainCamera'.");
         
         // Setup Input Events
         _playerInput.Player.Move.started += OnMovementInput;
@@ -57,24 +67,42 @@ public class ThirdPersonPlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        CalculateCameraRelativeDirection(); // Hitung arah kamera dulu
         MovePlayer();
         RotatePlayer();
     }
+
     public void SetMovementState(float penalty, Transform lookTarget)
     {
         _speedModifier = Mathf.Clamp01(1f - penalty);
         _lookTarget = lookTarget;
     }
 
+    // --- METHOD BARU: Menghitung arah berdasarkan kamera ---
+    private void CalculateCameraRelativeDirection()
+    {
+        if (_mainCameraTransform == null) return;
+
+        Vector3 camForward = _mainCameraTransform.forward;
+        Vector3 camRight = _mainCameraTransform.right;
+
+        // Abaikan sumbu Y agar perhitungan gerak tetap di permukaan datar
+        camForward.y = 0f;
+        camRight.y = 0f;
+
+        camForward.Normalize();
+        camRight.Normalize();
+
+        // Gabungkan input dengan arah kamera
+        _currentMoveDirection = (camForward * _inputVector.y + camRight * _inputVector.x).normalized;
+    }
+
     private void MovePlayer()
     {
-        // Hitung target velocity
-        // mengubah input (X, Y) jadi arah dunia 3D (X, Z)
-        Vector3 targetDirection = new Vector3(_inputVector.x, 0f, _inputVector.y).normalized;
+        // Gunakan _currentMoveDirection, bukan lagi dari _inputVector.x/y langsung
+        Vector3 targetVelocity = _currentMoveDirection * _moveSpeed * _speedModifier;
         
-        // Terapkan kecepatan langsung
         // mengambil Velocity Y yang lama (Gravitasi) agar karakter tidak melayang
-        Vector3 targetVelocity = targetDirection * _moveSpeed * _speedModifier;
         targetVelocity.y = _rb.velocity.y; 
 
         // Set velocity Rigidbody
@@ -104,13 +132,11 @@ public class ThirdPersonPlayerController : MonoBehaviour
         }
         else if (_isMoving)
         {
-            // Arah tujuan hadap
-            Vector3 direction = new Vector3(_inputVector.x, 0f, _inputVector.y).normalized;
-            
-            if(direction.sqrMagnitude > 0.001f)
+            // Arah tujuan hadap diubah menjadi _currentMoveDirection
+            if(_currentMoveDirection.sqrMagnitude > 0.001f)
             {
                 // Hitung rotasi target
-                Quaternion targetRotation = Quaternion.LookRotation(direction);
+                Quaternion targetRotation = Quaternion.LookRotation(_currentMoveDirection);
                 
                 // Gunakan MoveRotation untuk memutar Rigidbody secara fisik
                 Quaternion nextRotation = Quaternion.Slerp(_rb.rotation, targetRotation, _rotationSpeed * Time.fixedDeltaTime);
