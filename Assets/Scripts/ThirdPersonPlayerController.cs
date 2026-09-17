@@ -1,12 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.Mathematics;
-using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-[RequireComponent(typeof(Rigidbody))]
-[RequireComponent(typeof(CapsuleCollider))]
+[RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
 public class ThirdPersonPlayerController : MonoBehaviour
 {
     private InputSystem_Actions _playerInput;
@@ -16,60 +11,91 @@ public class ThirdPersonPlayerController : MonoBehaviour
     [Header("Movement Settings")]
     [SerializeField] private float _moveSpeed = 8f;
     [SerializeField] private float _rotationSpeed = 15f;
-    [Header("Carry Movement Feel Settings")]
+
     private float _speedModifier = 1f;
-    private Transform _lookTarget = null;
-
+    private Transform _lookTarget;
     private Vector2 _inputVector;
-    private bool _isMoving;
+    private bool _movementLocked;
+    private static readonly int WalkingId = Animator.StringToHash("isWalking");
 
-    // --- TAMBAHAN UNTUK CAMERA-RELATIVE ---
-    private Vector3 _currentMoveDirection;
-    private Transform _mainCameraTransform; // Cache camera transform biar lebih ringan
+    public Animator CharacterAnimator => _animator;
 
     private void Awake()
     {
         _playerInput = new InputSystem_Actions();
         _rb = GetComponent<Rigidbody>();
-        
         _rb.interpolation = RigidbodyInterpolation.Interpolate;
         _rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-        
-        _rb.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
+        // Mempertahankan gerakan di bidang XZ dari controller awal.
+        _rb.constraints = RigidbodyConstraints.FreezePositionY |
+                          RigidbodyConstraints.FreezeRotation;
+        if (!_animator) _animator = GetComponentInChildren<Animator>();
 
-        if (_animator == null) _animator = GetComponentInChildren<Animator>();
-        
-        // Cache main camera di awal
-        if (Camera.main != null)
-            _mainCameraTransform = Camera.main.transform;
-        else
-            Debug.LogWarning("Main Camera tidak ditemukan! Pastikan objek kamera memiliki tag 'MainCamera'.");
-        
-        // Setup Input Events
         _playerInput.Player.Move.started += OnMovementInput;
         _playerInput.Player.Move.performed += OnMovementInput;
         _playerInput.Player.Move.canceled += OnMovementInput;
     }
 
     private void OnEnable() => _playerInput.Player.Enable();
-    private void OnDisable() => _playerInput.Player.Disable();
+
+    private void OnDisable()
+    {
+        _playerInput.Player.Disable();
+        _inputVector = Vector2.zero;
+        StopHorizontalMovement();
+        if (_animator) _animator.SetBool(WalkingId, false);
+    }
+
+    private void OnDestroy()
+    {
+        if (_playerInput == null) return;
+        _playerInput.Player.Move.started -= OnMovementInput;
+        _playerInput.Player.Move.performed -= OnMovementInput;
+        _playerInput.Player.Move.canceled -= OnMovementInput;
+        _playerInput.Dispose();
+    }
 
     private void OnMovementInput(InputAction.CallbackContext context)
     {
-        _inputVector = context.ReadValue<Vector2>();
-        _isMoving = _inputVector.x != 0 || _inputVector.y != 0;
+        _inputVector = Vector2.ClampMagnitude(context.ReadValue<Vector2>(), 1f);
     }
 
     private void Update()
     {
-        HandleAnimation();
+        if (_animator)
+            _animator.SetBool(WalkingId, !_movementLocked &&
+                _inputVector.sqrMagnitude > 0.001f && _speedModifier > 0f);
     }
 
     private void FixedUpdate()
     {
-        CalculateCameraRelativeDirection(); // Hitung arah kamera dulu
-        MovePlayer();
-        RotatePlayer();
+        if (_movementLocked)
+        {
+            StopHorizontalMovement();
+            return;
+        }
+
+        Vector3 direction = new Vector3(_inputVector.x, 0f, _inputVector.y);
+        Vector3 velocity = direction * _moveSpeed * _speedModifier;
+        velocity.y = GetVelocity().y;
+        SetVelocity(velocity);
+
+        bool moving = direction.sqrMagnitude > 0.001f;
+        float rotationSpeed = _rotationSpeed;
+        if (_lookTarget)
+        {
+            direction = _lookTarget.position - _rb.position;
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.001f) return;
+            float angle = Vector3.Angle(_rb.rotation * Vector3.forward, direction);
+            if (!(moving || angle > 30f) || angle <= 5f) return;
+            rotationSpeed *= 0.5f;
+        }
+        else if (!moving) return;
+
+        Quaternion target = Quaternion.LookRotation(direction);
+        _rb.MoveRotation(Quaternion.Slerp(_rb.rotation, target,
+            rotationSpeed * Time.fixedDeltaTime));
     }
 
     public void SetMovementState(float penalty, Transform lookTarget)
@@ -78,82 +104,36 @@ public class ThirdPersonPlayerController : MonoBehaviour
         _lookTarget = lookTarget;
     }
 
-    // --- METHOD BARU: Menghitung arah berdasarkan kamera ---
-    private void CalculateCameraRelativeDirection()
+    public void SetMovementLocked(bool locked)
     {
-        if (_mainCameraTransform == null) return;
-
-        Vector3 camForward = _mainCameraTransform.forward;
-        Vector3 camRight = _mainCameraTransform.right;
-
-        // Abaikan sumbu Y agar perhitungan gerak tetap di permukaan datar
-        camForward.y = 0f;
-        camRight.y = 0f;
-
-        camForward.Normalize();
-        camRight.Normalize();
-
-        // Gabungkan input dengan arah kamera
-        _currentMoveDirection = (camForward * _inputVector.y + camRight * _inputVector.x).normalized;
+        _movementLocked = locked;
+        if (!locked) return;
+        StopHorizontalMovement();
+        if (_animator) _animator.SetBool(WalkingId, false);
     }
 
-    private void MovePlayer()
+    private void StopHorizontalMovement()
     {
-        // Gunakan _currentMoveDirection, bukan lagi dari _inputVector.x/y langsung
-        Vector3 targetVelocity = _currentMoveDirection * _moveSpeed * _speedModifier;
-        
-        // mengambil Velocity Y yang lama (Gravitasi) agar karakter tidak melayang
-        targetVelocity.y = _rb.velocity.y; 
-
-        // Set velocity Rigidbody
-        _rb.velocity = targetVelocity;
+        if (!_rb || _rb.isKinematic) return;
+        Vector3 velocity = GetVelocity();
+        SetVelocity(new Vector3(0f, velocity.y, 0f));
     }
 
-    private void RotatePlayer()
+    private Vector3 GetVelocity()
     {
-        if (_lookTarget != null)
-        {
-            Vector3 directionToObj = _lookTarget.position - transform.position;
-            directionToObj.y = 0;
-
-            if(directionToObj.sqrMagnitude > 0.001f)
-            {
-                float angleDifference = Vector3.Angle(transform.forward, directionToObj);
-                
-                bool shouldRotate = (_isMoving || angleDifference > 30f) && angleDifference > 5f;
-
-                if(shouldRotate)
-                {
-                    Quaternion targetRotation = Quaternion.LookRotation(directionToObj);    
-                    float smoothSpeed = _rotationSpeed * 0.5f;
-                    _rb.MoveRotation(Quaternion.Slerp(_rb.rotation, targetRotation, smoothSpeed * Time.fixedDeltaTime));
-                }
-            }
-        }
-        else if (_isMoving)
-        {
-            // Arah tujuan hadap diubah menjadi _currentMoveDirection
-            if(_currentMoveDirection.sqrMagnitude > 0.001f)
-            {
-                // Hitung rotasi target
-                Quaternion targetRotation = Quaternion.LookRotation(_currentMoveDirection);
-                
-                // Gunakan MoveRotation untuk memutar Rigidbody secara fisik
-                Quaternion nextRotation = Quaternion.Slerp(_rb.rotation, targetRotation, _rotationSpeed * Time.fixedDeltaTime);
-                _rb.MoveRotation(nextRotation);
-            }
-        }
+#if UNITY_6000_0_OR_NEWER
+        return _rb.linearVelocity;
+#else
+        return _rb.velocity;
+#endif
     }
 
-    private void HandleAnimation()
+    private void SetVelocity(Vector3 velocity)
     {
-        if (_animator == null) return;
-
-        bool isWalking = _animator.GetBool("isWalking");
-        
-        if (_isMoving && !isWalking)
-            _animator.SetBool("isWalking", true);
-        else if (!_isMoving && isWalking)
-            _animator.SetBool("isWalking", false);
+#if UNITY_6000_0_OR_NEWER
+        _rb.linearVelocity = velocity;
+#else
+        _rb.velocity = velocity;
+#endif
     }
 }
