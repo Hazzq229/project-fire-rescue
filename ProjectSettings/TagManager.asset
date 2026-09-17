@@ -9,12 +9,14 @@ TagManager:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - Wall
   - Water
   - UI
   - Interactable
   - Kamera1
   - Kamera 2
+  - Road
+  - vlight
   - 
   - 
   - 
