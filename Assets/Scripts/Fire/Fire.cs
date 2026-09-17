@@ -1,9 +1,10 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
+[RequireComponent(typeof(Collider))]
 public class Fire : MonoBehaviour
 {
+    [SerializeField, Range(0f, 1000f)] private float ignitionRate = 20f;
+    [SerializeField, Range(0f, 1000f)] private float burningRate = 30f;
     [SerializeField, Range(0f, 1f)] private float currentIntensity = 1.0f;
     public float GetIntensity() => currentIntensity;
 
@@ -25,8 +26,6 @@ public class Fire : MonoBehaviour
             startIntensities[i] = fireParticleSystems[i].emission.rateOverTime.constant;
         }
     }
-
-
 
     private void Update()
     {
@@ -57,9 +56,7 @@ public class Fire : MonoBehaviour
             return true;
         }
 
-
-
-        return false; //fire is still lit
+        return false;
     }
 
     private void Die()
@@ -79,6 +76,18 @@ public class Fire : MonoBehaviour
         {
             var emission = fireParticleSystems[i].emission;
             emission.rateOverTime = currentIntensity * startIntensities[i];
+        }
+    }
+
+    private void OnTriggerStay(Collider other)
+    {
+        if (!isLit) return;
+
+        if (other.TryGetComponent(out CombustObject combustObj))
+        {
+            // Menyalurkan panas berdasarkan rate dan intensitas api saat ini
+            float heatToApply = ignitionRate * currentIntensity;
+            combustObj.ApplyHeat(heatToApply);
         }
     }
 }
