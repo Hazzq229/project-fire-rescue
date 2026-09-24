@@ -40,6 +40,8 @@ namespace HPlayer
         public bool Interacting { get; private set; }
         public bool IsPickingUp { get; private set; }
 
+        public bool ExternalInteractionLocked { get; set; }
+
         [SerializeField] private ThirdPersonPlayerController playerController;
         [SerializeField] private Rigidbody playerRb;
         public event Action OnInteractionStart;
@@ -114,7 +116,7 @@ namespace HPlayer
 
         public void BeginInteraction()
         {
-            if (!isActiveAndEnabled || Interacting) return;
+            if (!isActiveAndEnabled || Interacting || ExternalInteractionLocked) return;
             Interacting = true;
             if (!IsPickingUp)
             {
