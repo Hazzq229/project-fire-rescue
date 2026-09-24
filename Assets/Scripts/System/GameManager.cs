@@ -24,8 +24,8 @@ public class GameManager : MonoBehaviour
 
     [Header("Win Condition")]
     [SerializeField] private bool hasActiveFire = false;
-    [SerializeField] private bool isVictimSafe = false;
     [SerializeField] private List<Fire> activeFires = new List<Fire>();
+    [SerializeField] private List<VictimAI> activeVictims = new List<VictimAI>();
 
     [Header("UI References")]
     public TextMeshProUGUI stateText;
@@ -50,14 +50,9 @@ public class GameManager : MonoBehaviour
     {
         if (CurrentState == GameState.Playing)
         {
-            // Cek api aktif dalam scene
             CheckActiveFire();
-
-            // Tingkatkan damage seiring waktu hanya ketika ada api
             ApplyFireDamage();
-
             UpdateUI();
-
             CheckWinCondition();
         }
     }
@@ -73,34 +68,34 @@ public class GameManager : MonoBehaviour
                 HandleInitialization();
                 break;
             case GameState.Playing:
-                // Aktivasi kontrol player jika diperlukan
                 break;
             case GameState.Victory:
-                // Hentikan timer dan tampilkan UI Menang
                 break;
             case GameState.GameOver:
-                // Tampilkan UI Kalah
                 break;
         }
     }
 
     private void HandleInitialization()
     {
-        // Cari seluruh script Fire di dalam scene dan simpan ke dalam List
-        Fire[] firesInScene = FindObjectsByType<Fire>(FindObjectsSortMode.None);
-        activeFires.Clear();
-        activeFires.AddRange(firesInScene);
+        // Fire[] firesInScene = FindObjectsByType<Fire>(FindObjectsSortMode.None);
+        // activeFires.Clear();
+        // activeFires.AddRange(firesInScene);
+
+        VictimAI[] victimsInScene = FindObjectsByType<VictimAI>(FindObjectsSortMode.None);
+        activeVictims.Clear();
+        activeVictims.AddRange(victimsInScene);
 
         currentFireDamage = 0f;
-        isVictimSafe = false;
 
         ChangeState(GameState.Playing);
     }
-
-    // Dipanggil oleh script Trigger Safezone
-    public void SetVictimSafe(bool state)
+    public void RegisterFire(Fire newFire)
     {
-        isVictimSafe = state;
+        if (!activeFires.Contains(newFire))
+        {
+            activeFires.Add(newFire);
+        }
     }
     private void CheckActiveFire()
     {
@@ -115,17 +110,22 @@ public class GameManager : MonoBehaviour
             }
         }
     }
+
     private void CheckWinCondition()
     {
-        // Syarat 1: Korban harus berada di area aman
-        if (!isVictimSafe) return;
-
-        // Syarat 2: Pastikan tidak ada api yang menyala (enabled)
         if (hasActiveFire) return;
 
-        // Jika semua syarat terpenuhi, kondisi menang tercapai
+        foreach (VictimAI victim in activeVictims)
+        {
+            if (victim != null && !victim.isSafe)
+            {
+                return;
+            }
+        }
+
         ChangeState(GameState.Victory);
     }
+
     private void ApplyFireDamage()
     {
         if (hasActiveFire)
@@ -141,6 +141,7 @@ public class GameManager : MonoBehaviour
             }
         }
     }
+
     private void UpdateUI()
     {
         if (stateText != null)
@@ -150,7 +151,6 @@ public class GameManager : MonoBehaviour
 
         if (damageText != null)
         {
-            // Menggunakan Mathf.FloorToInt agar tampilan UI rapi tanpa angka desimal panjang
             damageText.text = $"{Mathf.FloorToInt(currentFireDamage)} / {maxFireDamageThreshold}";
         }
     }

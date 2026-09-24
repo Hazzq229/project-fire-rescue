@@ -25,6 +25,11 @@ public class Fire : MonoBehaviour
         {
             startIntensities[i] = fireParticleSystems[i].emission.rateOverTime.constant;
         }
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.RegisterFire(this);
+        }
     }
 
     private void Update()
