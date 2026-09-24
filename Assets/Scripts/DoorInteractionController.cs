@@ -1,18 +1,17 @@
 using System.Collections;
 using HGame.Objects;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace HPlayer
 {
-    [RequireComponent(typeof(Rigidbody))]
+    [RequireComponent(typeof(Rigidbody), typeof(LocalPlayerInput))]
     public class DoorInteractionController : MonoBehaviour
     {
         [SerializeField] private Animator animator;
         [SerializeField] private ThirdPersonPlayerController playerController;
         [SerializeField] private InteractionController interactionController;
         [SerializeField, Min(0.05f)] private float interactionDistance = 0.45f;
-        [SerializeField] private bool readKeyboardInput = true;
+        private LocalPlayerInput localInput;
         [SerializeField] private string idleStatePath = "Base Layer.Idle 0";
         [SerializeField, Min(1f)] private float maxActionSeconds = 8f;
         [Header("State names AND Trigger names must match")]
@@ -35,6 +34,7 @@ namespace HPlayer
         private void Awake()
         {
             body = GetComponent<Rigidbody>();
+            localInput = GetComponent<LocalPlayerInput>();
             if (!playerController) playerController = GetComponent<ThirdPersonPlayerController>();
             if (!interactionController) interactionController = GetComponent<InteractionController>();
         }
@@ -58,7 +58,7 @@ namespace HPlayer
                     CancelAction("Door: aksi terlalu lama. Periksa transition keluar dan durasi pintu.");
                 return;
             }
-            if (readKeyboardInput && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+            if (localInput && localInput.DoorPressed)
                 TryInteract();
         }
 

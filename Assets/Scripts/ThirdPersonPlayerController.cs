@@ -1,10 +1,10 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
+using HPlayer;
 
-[RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
+[RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider), typeof(LocalPlayerInput))]
 public class ThirdPersonPlayerController : MonoBehaviour
 {
-    private InputSystem_Actions _playerInput;
+    private LocalPlayerInput _localInput;
     private Rigidbody _rb;
     [SerializeField] private Animator _animator;
 
@@ -22,7 +22,7 @@ public class ThirdPersonPlayerController : MonoBehaviour
 
     private void Awake()
     {
-        _playerInput = new InputSystem_Actions();
+        _localInput = GetComponent<LocalPlayerInput>();
         _rb = GetComponent<Rigidbody>();
         _rb.interpolation = RigidbodyInterpolation.Interpolate;
         _rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
@@ -31,37 +31,19 @@ public class ThirdPersonPlayerController : MonoBehaviour
                           RigidbodyConstraints.FreezeRotation;
         if (!_animator) _animator = GetComponentInChildren<Animator>();
 
-        _playerInput.Player.Move.started += OnMovementInput;
-        _playerInput.Player.Move.performed += OnMovementInput;
-        _playerInput.Player.Move.canceled += OnMovementInput;
     }
 
-    private void OnEnable() => _playerInput.Player.Enable();
 
     private void OnDisable()
     {
-        _playerInput.Player.Disable();
         _inputVector = Vector2.zero;
         StopHorizontalMovement();
         if (_animator) _animator.SetBool(WalkingId, false);
     }
 
-    private void OnDestroy()
-    {
-        if (_playerInput == null) return;
-        _playerInput.Player.Move.started -= OnMovementInput;
-        _playerInput.Player.Move.performed -= OnMovementInput;
-        _playerInput.Player.Move.canceled -= OnMovementInput;
-        _playerInput.Dispose();
-    }
-
-    private void OnMovementInput(InputAction.CallbackContext context)
-    {
-        _inputVector = Vector2.ClampMagnitude(context.ReadValue<Vector2>(), 1f);
-    }
-
     private void Update()
     {
+        _inputVector = _localInput ? Vector2.ClampMagnitude(_localInput.MoveInput, 1f) : Vector2.zero;
         if (_animator)
             _animator.SetBool(WalkingId, !_movementLocked &&
                 _inputVector.sqrMagnitude > 0.001f && _speedModifier > 0f);
@@ -69,6 +51,8 @@ public class ThirdPersonPlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        // Berhenti juga jika sumber input dinonaktifkan di antara Update.
+        if (!_localInput || !_localInput.IsReady) _inputVector = Vector2.zero;
         if (_movementLocked)
         {
             StopHorizontalMovement();
