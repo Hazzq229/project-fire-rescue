@@ -4,11 +4,10 @@ using HInteractions;
 using HGame.Objects;
 using NaughtyAttributes;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace HPlayer
 {
-    [RequireComponent(typeof(Rigidbody))]
+    [RequireComponent(typeof(Rigidbody), typeof(LocalPlayerInput))]
     public class InteractionController : MonoBehaviour, IObjectHolder
     {
         [Header("Hold Settings")]
@@ -30,16 +29,13 @@ namespace HPlayer
         [Tooltip("Batas menunggu Animator masuk ke state Pickup.")]
         [SerializeField, Min(0.1f)] private float pickupStartTimeout = 1f;
 
-        [Header("Input")]
-        [Tooltip("Matikan untuk pemain yang dikendalikan input terpisah.")]
-        [SerializeField] private bool readMouseInput = true;
+        private LocalPlayerInput localInput;
 
         [field: SerializeField, ReadOnly]
         public Liftable HeldObject { get; private set; }
         [field: SerializeField, ReadOnly]
         public bool Interacting { get; private set; }
         public bool IsPickingUp { get; private set; }
-
         public bool ExternalInteractionLocked { get; set; }
 
         [SerializeField] private ThirdPersonPlayerController playerController;
@@ -64,6 +60,7 @@ namespace HPlayer
         {
             // Controller, movement, dan Rigidbody harus berada pada root yang sama.
             playerRb = GetComponent<Rigidbody>();
+            localInput = GetComponent<LocalPlayerInput>();
             if (!playerController) playerController = GetComponent<ThirdPersonPlayerController>();
             if (!animator) animator = GetComponentInChildren<Animator>();
         }
@@ -79,18 +76,38 @@ namespace HPlayer
                 FinishPickup();
             }
 
-            if (!readMouseInput) return;
-            Mouse mouse = Mouse.current;
-            if (mouse == null)
+            if (!localInput || !localInput.IsReady)
             {
                 EndInteraction();
                 return;
             }
-            if (mouse.leftButton.wasPressedThisFrame) BeginInteraction();
-            if (mouse.leftButton.wasReleasedThisFrame) EndInteraction();
-            if (!IsPickingUp && mouse.rightButton.wasPressedThisFrame &&
-                HeldObject is HoseNozzle nozzle)
-                nozzle.ToggleShooting();
+            if (localInput.GrabPressed) BeginInteraction();
+            if (!localInput.GrabHeld) EndInteraction();
+            if (localInput.ToolPressed)
+            {
+                if (IsPickingUp || ExternalInteractionLocked)
+                {
+                    Debug.Log(
+                        "[Hose Input] Tunggu pickup selesai atau interaksi lain berakhir.",
+                        this);
+                }
+                else if (HeldObject == null)
+                {
+                    Debug.Log("[Hose Input] Player belum memegang objek.", this);
+                }
+                else if (HeldObject.TryGetComponent<
+                    HGame.Objects.HoseWaterController>(out var waterController))
+                {
+                    waterController.ToggleShooting();
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        $"[Hose Input] Objek {HeldObject.name} tidak memiliki " +
+                        "HoseWaterController pada GameObject yang sama.",
+                        HeldObject);
+                }
+            }
         }
 
         private void FixedUpdate()
