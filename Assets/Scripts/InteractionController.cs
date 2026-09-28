@@ -15,6 +15,11 @@ namespace HPlayer
         [SerializeField, Required] private Collider handTrigger;
         [SerializeField] private int heldObjectLayer;
 
+        [Header("Independent Physics Anchor")]
+        [Tooltip("Titik membawa pada root player, bukan tulang tangan IK. Jika kosong, memakai Hand Transform lama.")]
+        [SerializeField] private Transform carryAnchor;
+        private Transform PhysicsAnchor => carryAnchor ? carryAnchor : handTransform;
+
         [Header("Physics Joint Settings")]
         [SerializeField] private float jointSpring = 1500f;
         [SerializeField] private float jointDamper = 100f;
@@ -125,9 +130,9 @@ namespace HPlayer
                 playerController.SetMovementState(HeldObject.SpeedPenalty,
                     HeldObject.ForceFaceObject ? HeldObject.transform : null);
 
-            // Tangan dapat bergerak karena animasi. Anchor mengikuti posisi terbarunya.
-            if (grabJoint && handTransform)
-                grabJoint.anchor = transform.InverseTransformPoint(handTransform.position);
+            // Titik fisika terpisah dari tangan yang diarahkan oleh IK.
+            if (grabJoint && PhysicsAnchor)
+                grabJoint.anchor = transform.InverseTransformPoint(PhysicsAnchor.position);
             RotateHeldObjectPhysics();
         }
 
@@ -266,7 +271,7 @@ namespace HPlayer
             grabJoint = gameObject.AddComponent<SpringJoint>();
             grabJoint.autoConfigureConnectedAnchor = false;
             grabJoint.connectedBody = obj.Rigidbody;
-            grabJoint.anchor = transform.InverseTransformPoint(handTransform.position);
+            grabJoint.anchor = transform.InverseTransformPoint(PhysicsAnchor.position);
             grabJoint.connectedAnchor = obj.Rigidbody.transform.InverseTransformPoint(anchor);
             grabJoint.spring = jointSpring;
             grabJoint.damper = jointDamper;
@@ -280,12 +285,12 @@ namespace HPlayer
 
         private void RotateHeldObjectPhysics()
         {
-            if (!HeldObject || !HeldObject.Rigidbody || !handTransform) return;
+            if (!HeldObject || !HeldObject.Rigidbody || !PhysicsAnchor) return;
             // Satu pengendali rotasi mencegah torque kedua pemain saling melawan.
             if (HeldObject.Holders.Count > 0 &&
                 !ReferenceEquals(HeldObject.Holders[0], this)) return;
             Rigidbody objRb = HeldObject.Rigidbody;
-            Quaternion target = handTransform.rotation * Quaternion.Euler(HeldObject.LiftDirectionOffset);
+            Quaternion target = PhysicsAnchor.rotation * Quaternion.Euler(HeldObject.LiftDirectionOffset);
             Quaternion difference = target * Quaternion.Inverse(objRb.rotation);
             difference.ToAngleAxis(out float angle, out Vector3 axis);
             if (angle > 180f) angle -= 360f;
