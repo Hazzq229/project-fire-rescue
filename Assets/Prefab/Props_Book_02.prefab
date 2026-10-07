@@ -99,6 +99,10 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 2529266293798308470}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 850c38b7ef897cf4f8a58ed9ed36a4c4,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7962874970259829838}
   m_SourcePrefab: {fileID: 100100000, guid: 850c38b7ef897cf4f8a58ed9ed36a4c4, type: 3}
 --- !u!1 &531963490915656408 stripped
 GameObject:
@@ -172,3 +176,21 @@ MonoBehaviour:
   <LiftDirectionOffset>k__BackingField: {x: 0, y: 0, z: 0}
   defaultSpeedPenalty: 0
   defaultForceFaceObject: 0
+--- !u!114 &7962874970259829838
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 531963490915656408}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 0
+  state: 0
+  ignitionPoint: 10
+  burningPoint: 60
+  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
+    type: 3}
