@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
@@ -30,6 +31,9 @@ public class GameManager : MonoBehaviour
     [Header("UI References")]
     public TextMeshProUGUI stateText;
     public TextMeshProUGUI damageText;
+    public Slider damageSlider;
+    public TextMeshProUGUI victimText;
+
 
     private void Awake()
     {
@@ -78,18 +82,22 @@ public class GameManager : MonoBehaviour
 
     private void HandleInitialization()
     {
-        // Fire[] firesInScene = FindObjectsByType<Fire>(FindObjectsSortMode.None);
-        // activeFires.Clear();
-        // activeFires.AddRange(firesInScene);
-
         VictimAI[] victimsInScene = FindObjectsByType<VictimAI>(FindObjectsSortMode.None);
         activeVictims.Clear();
         activeVictims.AddRange(victimsInScene);
 
         currentFireDamage = 0f;
 
+
+        if (damageSlider != null)
+        {
+            damageSlider.maxValue = maxFireDamageThreshold;
+            damageSlider.value = 0f;
+        }
+
         ChangeState(GameState.Playing);
     }
+
     public void RegisterFire(Fire newFire)
     {
         if (!activeFires.Contains(newFire))
@@ -97,6 +105,7 @@ public class GameManager : MonoBehaviour
             activeFires.Add(newFire);
         }
     }
+
     private void CheckActiveFire()
     {
         hasActiveFire = false;
@@ -152,6 +161,24 @@ public class GameManager : MonoBehaviour
         if (damageText != null)
         {
             damageText.text = $"{Mathf.FloorToInt(currentFireDamage)} / {maxFireDamageThreshold}";
+        }
+
+        if (damageSlider != null)
+        {
+            damageSlider.value = currentFireDamage;
+        }
+
+        if (victimText != null)
+        {
+            int safeVictimsCount = 0;
+            foreach (VictimAI victim in activeVictims)
+            {
+                if (victim != null && victim.isSafe)
+                {
+                    safeVictimsCount++;
+                }
+            }
+            victimText.text = $"{safeVictimsCount} / {activeVictims.Count}";
         }
     }
 }
