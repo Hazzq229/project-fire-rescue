@@ -35570,7 +35570,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
     type: 3}
-  numberOfFires: 8
+  numberOfFires: 15
   spawnArea: {fileID: 826261106}
 --- !u!1001 &830008073
 PrefabInstance:
@@ -60073,6 +60073,17 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 8768784540877211988, guid: 7b2ed59da6ddff141a0fb6ce29c25644,
+        type: 3}
+      propertyPath: firePrefab
+      value: 
+      objectReference: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
+        type: 3}
+    - target: {fileID: 8768784540877211988, guid: 7b2ed59da6ddff141a0fb6ce29c25644,
+        type: 3}
+      propertyPath: burningPoint
+      value: 19.5
+      objectReference: {fileID: 0}
     - target: {fileID: 9015091703740852617, guid: 7b2ed59da6ddff141a0fb6ce29c25644,
         type: 3}
       propertyPath: m_Name
@@ -63077,12 +63088,15 @@ VisualEffect:
       - m_Value: 11.45
         m_Name: Frequency
         m_Overridden: 1
-      - m_Value: 7.13
+      - m_Value: 3
         m_Name: FrontForce
         m_Overridden: 1
-      - m_Value: 0.001
+      - m_Value: 0.06
         m_Name: SpawnRadius
-        m_Overridden: 0
+        m_Overridden: 1
+      - m_Value: 5000
+        m_Name: SpawnRate
+        m_Overridden: 1
     m_Vector2f:
       m_Array: []
     m_Vector3f:
@@ -79628,9 +79642,9 @@ MonoBehaviour:
   enableFireExtinguishing: 0
   extinguishRate: 1
   raycastOrigin: {fileID: 1510632173}
-  segmentCount: 15
-  waterSpeed: 10
-  timeStep: 0.1
+  segmentCount: 10
+  waterSpeed: 7
+  timeStep: 0.05
   debugLogs: 1
   isShooting: 0
 --- !u!1001 &1931110962

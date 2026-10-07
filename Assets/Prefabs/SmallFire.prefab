@@ -4884,8 +4884,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Size: {x: 1.2230498, y: 1.7328777, z: 1.2867782}
+  m_Center: {x: 0.003186524, y: 0.36643887, z: -0.022305012}
 --- !u!114 &6725877379961713912
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4898,8 +4898,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a1ba25ce5fba98aaba907877e070492, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ignitionRate: 1
-  burningRate: 3
+  ignitionRate: 3
+  burningRate: 10
   currentIntensity: 1
   regenDelay: 1.2
   regenRate: 0.1

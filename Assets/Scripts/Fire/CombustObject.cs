@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Animations;
 
 public class CombustObject : MonoBehaviour
 {
@@ -66,7 +67,11 @@ public class CombustObject : MonoBehaviour
         // Memunculkan api di titik origin object
         if (firePrefab != null)
         {
-            Instantiate(firePrefab, transform.position, Quaternion.identity, transform);
+            GameObject fire = Instantiate(firePrefab, transform.position, Quaternion.identity);
+
+            PositionConstraint constraint = fire.AddComponent<PositionConstraint>();
+            constraint.AddSource(new ConstraintSource { sourceTransform = transform, weight = 1f });
+            constraint.constraintActive = true;
         }
 
         // TODO: Implementasi perubahan rupa saat Ignited

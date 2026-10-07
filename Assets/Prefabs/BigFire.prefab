@@ -14509,12 +14509,12 @@ BoxCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 2.1747074, y: 1.42, z: 2.3077803}
-  m_Center: {x: 0.012172699, y: 0, z: -0.09170866}
+  m_Size: {x: 2.609037, y: 4.093033, z: 2.868205}
+  m_Center: {x: -0.03686452, y: 0.76950955, z: -0.049676836}
 --- !u!114 &4304860894817827754
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -14527,8 +14527,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a1ba25ce5fba98aaba907877e070492, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ignitionRate: 5
-  burningRate: 6
+  ignitionRate: 20
+  burningRate: 25
   currentIntensity: 1
   regenDelay: 2
   regenRate: 0.4

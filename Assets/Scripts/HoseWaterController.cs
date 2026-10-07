@@ -144,7 +144,7 @@ namespace HGame.Objects
                         fire.TryExtinguish(extinguishRate * Time.fixedDeltaTime);
 
                     // Air berhenti ketika mengenai objek pertama.
-                    break;
+                    //break;
                 }
 
                 startPos = nextPos;
@@ -154,6 +154,31 @@ namespace HGame.Objects
         {
             isShooting = false;
             if (waterFX) waterFX.Stop();
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            if (!raycastOrigin)
+                return;
+
+            Vector3 startPos = raycastOrigin.position;
+            Vector3 currentVelocity = raycastOrigin.forward * waterSpeed;
+
+            Gizmos.color = Color.blue;
+
+            for (int i = 0; i < segmentCount; i++)
+            {
+                Vector3 nextPos =
+                    startPos +
+                    currentVelocity * timeStep;
+
+                currentVelocity += Physics.gravity * timeStep;
+
+                Gizmos.DrawLine(startPos, nextPos);
+                Gizmos.DrawSphere(nextPos, 0.025f);
+
+                startPos = nextPos;
+            }
         }
     }
 }
