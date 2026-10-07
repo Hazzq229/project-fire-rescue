@@ -17,6 +17,10 @@ public class GameManager : MonoBehaviour
 
     public GameState CurrentState { get; private set; }
 
+    [Header("Game Mode")]
+    [Tooltip("Centang untuk mewajibkan semua api padam agar bisa menang. Jika tidak dicentang, pemain menang asalkan semua korban selamat.")]
+    public bool requireAllFiresExtinguishedToWin = true;
+
     [Header("Game Settings")]
     public float maxFireDamageThreshold = 100f;
     [Tooltip("Jumlah damage yang bertambah setiap detiknya")]
@@ -88,7 +92,6 @@ public class GameManager : MonoBehaviour
 
         currentFireDamage = 0f;
 
-
         if (damageSlider != null)
         {
             damageSlider.maxValue = maxFireDamageThreshold;
@@ -122,7 +125,7 @@ public class GameManager : MonoBehaviour
 
     private void CheckWinCondition()
     {
-        if (hasActiveFire) return;
+        if (requireAllFiresExtinguishedToWin && hasActiveFire) return;
 
         foreach (VictimAI victim in activeVictims)
         {
