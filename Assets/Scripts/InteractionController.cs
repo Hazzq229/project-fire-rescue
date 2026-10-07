@@ -52,6 +52,7 @@ namespace HPlayer
         private Liftable currentCandidate;
         private Liftable pendingObject;
         private SpringJoint grabJoint;
+        private StableCarryAttachment stableCarry;
         private bool pickupEntered;
         private bool grabEventReceived;
         private float pickupRequestedAt;
@@ -129,6 +130,13 @@ namespace HPlayer
             if (playerController)
                 playerController.SetMovementState(HeldObject.SpeedPenalty,
                     HeldObject.ForceFaceObject ? HeldObject.transform : null);
+
+            if (stableCarry)
+            {
+                // Tidak mengarahkan badan ke objek yang mengikuti badan itu sendiri.
+                if (playerController) playerController.SetMovementState(HeldObject.SpeedPenalty, null);
+                return;
+            }
 
             // Titik fisika terpisah dari tangan yang diarahkan oleh IK.
             if (grabJoint && PhysicsAnchor)
@@ -262,11 +270,30 @@ namespace HPlayer
 
         private void PickUpObject(Liftable obj)
         {
+            StableCarryAttachment attachment = obj.GetComponent<StableCarryAttachment>();
+            if (attachment && attachment.isActiveAndEnabled)
+            {
+                if (!attachment.CanBegin(this, obj, carryAnchor, out string reason))
+                {
+                    Debug.LogWarning("Stable carry: " + reason, obj);
+                    return;
+                }
+                attachment.CaptureState();
+            }
+            else attachment = null;
+
             obj.PickUp(this, heldObjectLayer);
             // PickUp() milik Liftable tidak mengembalikan bool: cek daftar holder.
             if (!obj.Holders.Contains(this)) return;
             HeldObject = obj;
             currentCandidate = null;
+            if (attachment)
+            {
+                stableCarry = attachment;
+                attachment.BeginCarry(this, carryAnchor, obj.LiftDirectionOffset);
+                playerController.SetMovementState(obj.SpeedPenalty, null);
+                return;
+            }
             Vector3 anchor = obj.GetGrabPoint(handTransform.position);
             grabJoint = gameObject.AddComponent<SpringJoint>();
             grabJoint.autoConfigureConnectedAnchor = false;
@@ -303,10 +330,15 @@ namespace HPlayer
         {
             if (!obj) return;
             DestroyGrabJoint();
+            StableCarryAttachment attachment = stableCarry;
+            stableCarry = null;
+            Vector3 releaseVelocity = playerRb ? playerRb.GetPointVelocity(obj.transform.position) : Vector3.zero;
             HeldObject = null;
+            // Callback Liftable selesai dahulu, lalu pulihkan keadaan sebelum pickup.
             obj.Drop(this);
+            if (attachment) attachment.EndCarry(releaseVelocity);
             // Jika masih dipegang partner, hanya lepas; jangan lempar objek bersama.
-            if (throwObject && obj.Holders.Count == 0 && playerRb && obj.Rigidbody)
+            if (throwObject && obj.Holders.Count == 0 && playerRb && obj.Rigidbody && !obj.Rigidbody.isKinematic)
             {
 #if UNITY_6000_0_OR_NEWER
                 obj.Rigidbody.linearVelocity = playerRb.linearVelocity + transform.forward * throwForce;
@@ -315,6 +347,12 @@ namespace HPlayer
 #endif
             }
             if (playerController) playerController.SetMovementState(0f, null);
+        }
+
+        // Dipakai komponen attachment jika dinonaktifkan ketika sedang dibawa.
+        public void ReleaseHeldObject()
+        {
+            if (HeldObject) DropObject(HeldObject);
         }
 
         private void DestroyGrabJoint()
