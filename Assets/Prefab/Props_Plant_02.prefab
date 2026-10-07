@@ -71,6 +71,14 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 6802021236757190178}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 3926c48aa08a857458e489283262ed08,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9222965447126151143}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 3926c48aa08a857458e489283262ed08,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4273398887597152691}
   m_SourcePrefab: {fileID: 100100000, guid: 3926c48aa08a857458e489283262ed08, type: 3}
 --- !u!1 &2494211013912239668 stripped
 GameObject:
@@ -99,3 +107,48 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.53477883, y: 1.089619, z: 0.5838401}
   m_Center: {x: -0.0003207922, y: 0.54702586, z: 0}
+--- !u!54 &9222965447126151143
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2494211013912239668}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
+--- !u!114 &4273398887597152691
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2494211013912239668}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ef0207d4aaff9d4caff8b520d1bd121, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <ShowPointerOnInterract>k__BackingField: 1
+  <IsSelected>k__BackingField: 0
+  maxHolders: 1
+  <LiftDirectionOffset>k__BackingField: {x: 0, y: 0, z: 0}
+  defaultSpeedPenalty: 0
+  defaultForceFaceObject: 0

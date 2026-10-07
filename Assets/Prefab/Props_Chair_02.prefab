@@ -71,6 +71,14 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 1661417637750398025}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 71186e6c9da4eba408860fde67a6c477,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7286870979378410540}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 71186e6c9da4eba408860fde67a6c477,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4566515729992336359}
   m_SourcePrefab: {fileID: 100100000, guid: 71186e6c9da4eba408860fde67a6c477, type: 3}
 --- !u!1 &3377406182714488002 stripped
 GameObject:
@@ -99,3 +107,48 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.0051024277, y: 0.0062507344, z: 0.007838174}
   m_Center: {x: -0.00009584648, y: 2.328306e-10, z: 0.0039655245}
+--- !u!54 &7286870979378410540
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3377406182714488002}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
+--- !u!114 &4566515729992336359
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3377406182714488002}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ef0207d4aaff9d4caff8b520d1bd121, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <ShowPointerOnInterract>k__BackingField: 1
+  <IsSelected>k__BackingField: 0
+  maxHolders: 1
+  <LiftDirectionOffset>k__BackingField: {x: 0, y: 0, z: 0}
+  defaultSpeedPenalty: 0
+  defaultForceFaceObject: 0
