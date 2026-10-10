@@ -3,7 +3,17 @@ guid: 4a1ed3e8037994549a3980b1ffde08c1
 ModelImporter:
   serializedVersion: 22200
   internalIDToNameTable: []
-  externalObjects: {}
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Tex_Env
+    second: {fileID: 2100000, guid: 4ee372e6cbccc4944aae4abdb9943b17, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Tex_Env_Glass
+    second: {fileID: 2100000, guid: c61c535b771719b41831f9ef32723e77, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

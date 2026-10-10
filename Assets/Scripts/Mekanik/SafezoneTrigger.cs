@@ -2,21 +2,19 @@ using UnityEngine;
 
 public class SafeZoneTrigger : MonoBehaviour
 {
-    [SerializeField] private string victimTag = "Victim";
-
     private void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag(victimTag))
+        if (other.TryGetComponent(out VictimAI victim))
         {
-            GameManager.Instance.SetVictimSafe(true);
+            victim.isSafe = true;
         }
     }
 
     private void OnTriggerExit(Collider other)
     {
-        if (other.CompareTag(victimTag))
+        if (other.TryGetComponent(out VictimAI victim))
         {
-            GameManager.Instance.SetVictimSafe(false);
+            victim.isSafe = false;
         }
     }
 }

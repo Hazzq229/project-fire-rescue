@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
@@ -16,6 +17,10 @@ public class GameManager : MonoBehaviour
 
     public GameState CurrentState { get; private set; }
 
+    [Header("Game Mode")]
+    [Tooltip("Centang untuk mewajibkan semua api padam agar bisa menang. Jika tidak dicentang, pemain menang asalkan semua korban selamat.")]
+    public bool requireAllFiresExtinguishedToWin = true;
+
     [Header("Game Settings")]
     public float maxFireDamageThreshold = 100f;
     [Tooltip("Jumlah damage yang bertambah setiap detiknya")]
@@ -24,12 +29,15 @@ public class GameManager : MonoBehaviour
 
     [Header("Win Condition")]
     [SerializeField] private bool hasActiveFire = false;
-    [SerializeField] private bool isVictimSafe = false;
     [SerializeField] private List<Fire> activeFires = new List<Fire>();
+    [SerializeField] private List<VictimAI> activeVictims = new List<VictimAI>();
 
     [Header("UI References")]
     public TextMeshProUGUI stateText;
     public TextMeshProUGUI damageText;
+    public Slider damageSlider;
+    public TextMeshProUGUI victimText;
+
 
     private void Awake()
     {
@@ -50,14 +58,9 @@ public class GameManager : MonoBehaviour
     {
         if (CurrentState == GameState.Playing)
         {
-            // Cek api aktif dalam scene
             CheckActiveFire();
-
-            // Tingkatkan damage seiring waktu hanya ketika ada api
             ApplyFireDamage();
-
             UpdateUI();
-
             CheckWinCondition();
         }
     }
@@ -73,35 +76,39 @@ public class GameManager : MonoBehaviour
                 HandleInitialization();
                 break;
             case GameState.Playing:
-                // Aktivasi kontrol player jika diperlukan
                 break;
             case GameState.Victory:
-                // Hentikan timer dan tampilkan UI Menang
                 break;
             case GameState.GameOver:
-                // Tampilkan UI Kalah
                 break;
         }
     }
 
     private void HandleInitialization()
     {
-        // Cari seluruh script Fire di dalam scene dan simpan ke dalam List
-        Fire[] firesInScene = FindObjectsByType<Fire>(FindObjectsSortMode.None);
-        activeFires.Clear();
-        activeFires.AddRange(firesInScene);
+        VictimAI[] victimsInScene = FindObjectsByType<VictimAI>(FindObjectsSortMode.None);
+        activeVictims.Clear();
+        activeVictims.AddRange(victimsInScene);
 
         currentFireDamage = 0f;
-        isVictimSafe = false;
+
+        if (damageSlider != null)
+        {
+            damageSlider.maxValue = maxFireDamageThreshold;
+            damageSlider.value = 0f;
+        }
 
         ChangeState(GameState.Playing);
     }
 
-    // Dipanggil oleh script Trigger Safezone
-    public void SetVictimSafe(bool state)
+    public void RegisterFire(Fire newFire)
     {
-        isVictimSafe = state;
+        if (!activeFires.Contains(newFire))
+        {
+            activeFires.Add(newFire);
+        }
     }
+
     private void CheckActiveFire()
     {
         hasActiveFire = false;
@@ -115,17 +122,22 @@ public class GameManager : MonoBehaviour
             }
         }
     }
+
     private void CheckWinCondition()
     {
-        // Syarat 1: Korban harus berada di area aman
-        if (!isVictimSafe) return;
+        if (requireAllFiresExtinguishedToWin && hasActiveFire) return;
 
-        // Syarat 2: Pastikan tidak ada api yang menyala (enabled)
-        if (hasActiveFire) return;
+        foreach (VictimAI victim in activeVictims)
+        {
+            if (victim != null && !victim.isSafe)
+            {
+                return;
+            }
+        }
 
-        // Jika semua syarat terpenuhi, kondisi menang tercapai
         ChangeState(GameState.Victory);
     }
+
     private void ApplyFireDamage()
     {
         if (hasActiveFire)
@@ -141,6 +153,7 @@ public class GameManager : MonoBehaviour
             }
         }
     }
+
     private void UpdateUI()
     {
         if (stateText != null)
@@ -150,8 +163,25 @@ public class GameManager : MonoBehaviour
 
         if (damageText != null)
         {
-            // Menggunakan Mathf.FloorToInt agar tampilan UI rapi tanpa angka desimal panjang
             damageText.text = $"{Mathf.FloorToInt(currentFireDamage)} / {maxFireDamageThreshold}";
+        }
+
+        if (damageSlider != null)
+        {
+            damageSlider.value = currentFireDamage;
+        }
+
+        if (victimText != null)
+        {
+            int safeVictimsCount = 0;
+            foreach (VictimAI victim in activeVictims)
+            {
+                if (victim != null && victim.isSafe)
+                {
+                    safeVictimsCount++;
+                }
+            }
+            victimText.text = $"{safeVictimsCount} / {activeVictims.Count}";
         }
     }
 }
