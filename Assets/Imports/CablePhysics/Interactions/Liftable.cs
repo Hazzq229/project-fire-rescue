@@ -22,7 +22,17 @@ namespace HInteractions
         [SerializeField] protected bool defaultForceFaceObject = false;
 
         // getter that can be accessed from another script
-        public virtual float SpeedPenalty => defaultSpeedPenalty;
+        public virtual float SpeedPenalty
+        {
+            get
+            {
+                // Satu sumber penalti: adaptasi valid menggantikan default, bukan ditumpuk.
+                var adaptation = GetComponent<TA.AdaptiveAnimation.CarryWeightMovement>();
+                if (adaptation && adaptation.TryGetSpeedPenalty(out float penalty))
+                    return penalty;
+                return defaultSpeedPenalty;
+            }
+        }
         public virtual bool ForceFaceObject => defaultForceFaceObject;
         protected List<(GameObject obj, int defaultLayer)> _defaultLayers = new();
         private float _defaultDrag;

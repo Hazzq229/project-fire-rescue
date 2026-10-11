@@ -23,6 +23,15 @@ namespace TA.AdaptiveAnimation
         [Tooltip("Samakan dengan Swap Hands pada preview yang sudah berhasil.")]
         [SerializeField] private bool swapHands;
 
+        [Header("Rotasi pegangan")]
+        [Tooltip("Matikan saat mengatur target manual; aktifkan setelah rekam kalibrasi.")]
+        [SerializeField] private bool enableGripRotation;
+        [SerializeField] private HandGripRotationProfile rotationProfile;
+        [SerializeField] private string rotationStatus = "Rotasi manual";
+        private Quaternion savedLeftRotation;
+        private Quaternion savedRightRotation;
+        private bool hasSavedRotations;
+
         [Header("Durasi perubahan weight (detik)")]
         [SerializeField, Min(0.01f)] private float blendInDuration = 0.2f;
         [SerializeField, Min(0.01f)] private float blendOutDuration = 0.2f;
@@ -55,6 +64,7 @@ namespace TA.AdaptiveAnimation
             trackedObject = null;
             provider = null;
             hasSavedTargets = false;
+            hasSavedRotations = false;
             acceptedReach = false;
             warnedSetup = false;
             currentWeight = 0f;
@@ -89,6 +99,7 @@ namespace TA.AdaptiveAnimation
                 trackedObject = held;
                 provider = held ? held.GetComponent<GripPointProvider>() : null;
                 hasSavedTargets = false;
+                hasSavedRotations = false;
                 acceptedReach = false;
             }
 
@@ -139,6 +150,7 @@ namespace TA.AdaptiveAnimation
             savedLeftLocal = playerSpace.InverseTransformPoint(leftPoint);
             savedRightLocal = playerSpace.InverseTransformPoint(rightPoint);
             hasSavedTargets = true;
+            UpdateGripRotation(left, right, playerSpace);
             currentWeight = Mathf.MoveTowards(currentWeight, 1f,
                 Time.deltaTime / Mathf.Max(0.01f, blendInDuration));
             carryRig.weight = currentWeight;
@@ -155,11 +167,132 @@ namespace TA.AdaptiveAnimation
                 Transform playerSpace = interactionController.transform;
                 left.target.position = playerSpace.TransformPoint(savedLeftLocal);
                 right.target.position = playerSpace.TransformPoint(savedRightLocal);
+                if (hasSavedRotations && enableGripRotation)
+                {
+                    left.target.rotation = playerSpace.rotation * savedLeftRotation;
+                    right.target.rotation = playerSpace.rotation * savedRightRotation;
+                }
             }
             currentWeight = Mathf.MoveTowards(currentWeight, 0f,
                 Time.deltaTime / Mathf.Max(0.01f, blendOutDuration));
             carryRig.weight = currentWeight;
             status = reason;
+        }
+
+        private void UpdateGripRotation(TwoBoneIKConstraintData left,
+            TwoBoneIKConstraintData right, Transform playerSpace)
+        {
+            hasSavedRotations = false;
+            if (!enableGripRotation)
+            {
+                rotationStatus = "Rotasi manual: target dapat diputar";
+                return;
+            }
+            if (!rotationProfile || !rotationProfile.Matches(provider.GripStyleId))
+            {
+                rotationStatus = "Profil belum dikalibrasi atau gaya pegangan berbeda";
+                return;
+            }
+            if (!provider.TryGetGripRotations(out Quaternion a, out Quaternion b))
+            {
+                var boxProvider = provider as BoxGripProvider;
+                rotationStatus = boxProvider && boxProvider.SharedOrientationProfile
+                    ? "Preset " + boxProvider.GripPreset + " belum direkam: rotasi target tidak diubah"
+                    : "Provider tidak menyediakan orientasi";
+                return;
+            }
+            left.target.rotation = (swapHands ? b : a) * rotationProfile.LeftCorrection;
+            right.target.rotation = (swapHands ? a : b) * rotationProfile.RightCorrection;
+            savedLeftRotation = Quaternion.Inverse(playerSpace.rotation) * left.target.rotation;
+            savedRightRotation = Quaternion.Inverse(playerSpace.rotation) * right.target.rotation;
+            hasSavedRotations = true;
+            var activeBox = provider as BoxGripProvider;
+            rotationStatus = activeBox && activeBox.SharedOrientationProfile
+                ? "Mengikuti preset " + activeBox.GripPreset
+                : "Mengikuti orientasi grip objek";
+        }
+
+        [ContextMenu("Rekam Kalibrasi Rotasi Dari Target")]
+        private void CaptureRotationCalibration() => CaptureRotation(false);
+
+        [ContextMenu("Rekam Preset Terpilih Dari Target")]
+        private void CaptureSharedPreset() => CaptureRotation(true);
+
+        private void CaptureRotation(bool recordShared)
+        {
+            if (!Application.isPlaying || !isActiveAndEnabled || !ValidateSetup())
+            {
+                Debug.LogWarning("Kalibrasi: jalankan Play Mode dengan controller aktif.", this);
+                return;
+            }
+            if (enableGripRotation)
+            {
+                Debug.LogWarning("Matikan Enable Grip Rotation sebelum mengatur dan merekam target.", this);
+                return;
+            }
+            if (!rotationProfile || !provider || !provider.isActiveAndEnabled ||
+                !trackedObject || interactionController.HeldObject != trackedObject ||
+                !acceptedReach || currentWeight < 0.999f ||
+                string.IsNullOrEmpty(provider.GripStyleId))
+            {
+                Debug.LogWarning("Isi Rotation Profile dan pegang kardus sampai Current Weight = 1 serta grip terjangkau.", this);
+                return;
+            }
+            var left = leftArmIK.data;
+            var right = rightArmIK.data;
+            if (left.targetRotationWeight < 0.999f || right.targetRotationWeight < 0.999f ||
+                left.maintainTargetRotationOffset || right.maintainTargetRotationOffset ||
+                leftArmIK.weight < 0.999f || rightArmIK.weight < 0.999f || carryRig.weight < 0.999f)
+            {
+                Debug.LogWarning("Gunakan weight rig/constraint/Target Rotation = 1 dan nonaktifkan Maintain Target Rotation Offset sebelum Play.", this);
+                return;
+            }
+            var box = provider as BoxGripProvider;
+            if (recordShared && (!box || !box.SharedOrientationProfile ||
+                !rotationProfile.Matches(provider.GripStyleId)))
+            {
+                Debug.LogWarning("Isi Shared Orientation Profile pada objek dan gunakan Rotation Profile karakter yang sudah dikalibrasi pada Medium.", this);
+                return;
+            }
+            if (!recordShared && box && box.SharedOrientationProfile)
+            {
+                Debug.LogWarning("Kalibrasi karakter memakai box referensi tanpa Shared Orientation Profile. Untuk merekam slot Small/Medium/Big, gunakan Rekam Preset Terpilih Dari Target.", this);
+                return;
+            }
+            Quaternion a = Quaternion.identity, b = Quaternion.identity;
+            if (!recordShared && !provider.TryGetGripRotations(out a, out b)) return;
+            // Slot kosong boleh direkam: tidak perlu membaca orientasi slot sebelumnya.
+            if (recordShared && !provider.TryGetGripPoints(out Vector3 pointA, out Vector3 pointB)) return;
+            UnityEngine.Object saveTarget = recordShared
+                ? (UnityEngine.Object)box.SharedOrientationProfile : rotationProfile;
+#if UNITY_EDITOR
+            if (!UnityEditor.AssetDatabase.Contains(saveTarget))
+            {
+                Debug.LogWarning("Gunakan file asset yang dibuat di panel Project.", this);
+                return;
+            }
+            UnityEditor.Undo.RecordObject(saveTarget, "Rekam preset grip");
+#endif
+            if (recordShared)
+            {
+                Quaternion leftFrame = left.target.rotation * Quaternion.Inverse(rotationProfile.LeftCorrection);
+                Quaternion rightFrame = right.target.rotation * Quaternion.Inverse(rotationProfile.RightCorrection);
+                if (!box.RecordSharedFrames(swapHands ? rightFrame : leftFrame,
+                    swapHands ? leftFrame : rightFrame)) return;
+            }
+            else
+            {
+                rotationProfile.Record(provider.GripStyleId, swapHands ? b : a,
+                    swapHands ? a : b, left.target.rotation, right.target.rotation);
+            }
+#if UNITY_EDITOR
+            UnityEditor.EditorUtility.SetDirty(saveTarget);
+            UnityEditor.AssetDatabase.SaveAssets();
+#endif
+            enableGripRotation = true;
+            rotationStatus = "Kalibrasi tersimpan; rotasi otomatis aktif";
+            Debug.Log((recordShared ? "Preset " + box.GripPreset + " tersimpan di " : "Kalibrasi karakter tersimpan di ")
+                + saveTarget.name + ". Setelah keluar Play, aktifkan Enable Grip Rotation dan simpan Scene.", this);
         }
 
         private bool ValidateSetup()
@@ -201,6 +334,7 @@ namespace TA.AdaptiveAnimation
             currentWeight = 0f;
             acceptedReach = false;
             hasSavedTargets = false;
+            hasSavedRotations = false;
             if (carryRig) carryRig.weight = 0f;
             if (!warnedSetup)
             {

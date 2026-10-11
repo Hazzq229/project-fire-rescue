@@ -1018,7 +1018,7 @@ MonoBehaviour:
     m_Target: {fileID: 1369658772}
     m_Hint: {fileID: 1095874744}
     m_TargetPositionWeight: 1
-    m_TargetRotationWeight: 0
+    m_TargetRotationWeight: 1
     m_HintWeight: 1
     m_MaintainTargetPositionOffset: 0
     m_MaintainTargetRotationOffset: 0
@@ -1046,13 +1046,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 792578883}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0.12066031, y: 0.69673604, z: 0.69673604, w: 0.12066031}
   m_LocalPosition: {x: -0.303, y: 0.271, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1509706916}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -90, y: 0, z: 160.35}
 --- !u!4 &801041466 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -1458019044077441469, guid: 7b415783fee1bac41972f815f182debe,
@@ -1117,7 +1117,7 @@ MonoBehaviour:
     m_Target: {fileID: 792578884}
     m_Hint: {fileID: 1238344499}
     m_TargetPositionWeight: 1
-    m_TargetRotationWeight: 0
+    m_TargetRotationWeight: 1
     m_HintWeight: 1
     m_MaintainTargetPositionOffset: 0
     m_MaintainTargetRotationOffset: 0
@@ -1266,6 +1266,11 @@ MonoBehaviour:
   boxCollider: {fileID: 1117040832}
   gripHeight: 0.5
   gripDepth: 0
+  sharedOrientationProfile: {fileID: 11400000, guid: 769c5971429367846b920d48eac58693,
+    type: 2}
+  gripPreset: 0
+  additionalRotationA: {x: 0, y: 0, z: 0}
+  additionalRotationB: {x: 0, y: 0, z: 0}
 --- !u!54 &1117040831
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1950,6 +1955,10 @@ MonoBehaviour:
   boxCollider: {fileID: 1347745803}
   gripHeight: 0.5
   gripDepth: 0
+  sharedOrientationProfile: {fileID: 0}
+  gripPreset: 1
+  additionalRotationA: {x: 0, y: 0, z: 0}
+  additionalRotationB: {x: 0, y: 0, z: 0}
 --- !u!114 &1347745808
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2018,13 +2027,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1369658771}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0.06162845, y: 0.70441604, z: 0.70441604, w: -0.06162845}
   m_LocalPosition: {x: 0.193, y: 0.212, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1509706916}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -90, y: 0, z: 190}
 --- !u!1 &1369714575
 GameObject:
   m_ObjectHideFlags: 0
@@ -2042,6 +2051,7 @@ GameObject:
   - component: {fileID: 1369714578}
   - component: {fileID: 1369714577}
   - component: {fileID: 1369714576}
+  - component: {fileID: 1369714585}
   m_Layer: 0
   m_Name: Box_Medium (2)
   m_TagString: Untagged
@@ -2108,6 +2118,11 @@ MonoBehaviour:
   boxCollider: {fileID: 1369714581}
   gripHeight: 0.5
   gripDepth: 0
+  sharedOrientationProfile: {fileID: 11400000, guid: 769c5971429367846b920d48eac58693,
+    type: 2}
+  gripPreset: 1
+  additionalRotationA: {x: 0, y: 0, z: 0}
+  additionalRotationB: {x: 0, y: 0, z: 0}
 --- !u!54 &1369714580
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -2222,6 +2237,23 @@ Transform:
   - {fileID: 386548239}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1369714585
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1369714575}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b3f7943aa1b35441917863160da6dd6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  speedProfile: {fileID: 11400000, guid: 97f7029f12d86764ab91f35e77795b1d, type: 2}
+  status: Belum dibaca oleh Liftable
+  evaluatedWeightKg: 0
+  speedPercent: 100
+  evaluatedPenalty: 0
 --- !u!1001 &1504497995
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2413,6 +2445,9 @@ MonoBehaviour:
   leftArmIK: {fileID: 1032083973}
   rightArmIK: {fileID: 723666712}
   swapHands: 0
+  enableGripRotation: 1
+  rotationProfile: {fileID: 11400000, guid: d8bd5b3b2f4184840b06a1b0294a3536, type: 2}
+  rotationStatus: Rotasi manual
   blendInDuration: 0.2
   blendOutDuration: 0.2
   maximumReachRatio: 0.98
@@ -2554,6 +2589,11 @@ MonoBehaviour:
   boxCollider: {fileID: 1610597207}
   gripHeight: 0.35
   gripDepth: 0
+  sharedOrientationProfile: {fileID: 11400000, guid: 769c5971429367846b920d48eac58693,
+    type: 2}
+  gripPreset: 2
+  additionalRotationA: {x: 0, y: 0, z: 0}
+  additionalRotationB: {x: 0, y: 0, z: 0}
 --- !u!54 &1610597206
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -3023,6 +3063,10 @@ MonoBehaviour:
   boxCollider: {fileID: 1894904900}
   gripHeight: 0.5
   gripDepth: 0
+  sharedOrientationProfile: {fileID: 0}
+  gripPreset: 1
+  additionalRotationA: {x: 0, y: 0, z: 0}
+  additionalRotationB: {x: 0, y: 0, z: 0}
 --- !u!54 &1894904899
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -3210,6 +3254,10 @@ MonoBehaviour:
   boxCollider: {fileID: 2046745373}
   gripHeight: 0.5
   gripDepth: 0
+  sharedOrientationProfile: {fileID: 0}
+  gripPreset: 1
+  additionalRotationA: {x: 0, y: 0, z: 0}
+  additionalRotationB: {x: 0, y: 0, z: 0}
 --- !u!54 &2046745372
 Rigidbody:
   m_ObjectHideFlags: 0
