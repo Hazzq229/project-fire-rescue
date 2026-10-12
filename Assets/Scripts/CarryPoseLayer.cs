@@ -13,6 +13,7 @@ namespace HPlayer
 
         private int carryLayerIndex = -1;
         private bool initialized;
+        private int hoseLayerIndex = -1;
         private static readonly int PickupStateId = Animator.StringToHash("Base Layer.Pickup");
 
         private void Awake()
@@ -50,6 +51,12 @@ namespace HPlayer
             animator.SetLayerWeight(carryLayerIndex, 0f);
             // Pose pertama dari clip CarryHold; state Speed harus 0.
             animator.Play(stateId, carryLayerIndex, 0f);
+            hoseLayerIndex = animator.GetLayerIndex("Hose Layer");
+            if (hoseLayerIndex > 0)
+            {
+                animator.Play(Animator.StringToHash("Hose Layer.HoseHold"), hoseLayerIndex, 0f);
+                animator.SetLayerWeight(hoseLayerIndex, 0f);
+            }
             initialized = true;
         }
 
@@ -59,6 +66,7 @@ namespace HPlayer
 
             bool holding = interactionController && interactionController.isActiveAndEnabled &&
                            interactionController.HeldObject != null;
+            bool wantsHose = holding && interactionController.HeldObject is TA.AdaptiveAnimation.CooperativeHoseGrip;
             bool pickupFinished = interactionController && !interactionController.IsPickingUp;
 
             // Mulai blend saat Pickup bertransisi keluar agar lengan tidak turun
@@ -70,7 +78,16 @@ namespace HPlayer
                                 animator.GetNextAnimatorStateInfo(0).fullPathHash != PickupStateId;
             }
 
-            float targetWeight = holding && (pickupFinished || leavingPickup) ? 1f : 0f;
+            bool cooperative = interactionController && interactionController.HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject;
+            float targetWeight = holding && !interactionController.IsPlacingDown &&
+                (pickupFinished || leavingPickup || cooperative) ? 1f : 0f;
+            if (hoseLayerIndex > 0)
+            {
+                float targetHose = wantsHose ? targetWeight : 0f;
+                animator.SetLayerWeight(hoseLayerIndex, blendDuration <= 0f ? targetHose :
+                    Mathf.MoveTowards(animator.GetLayerWeight(hoseLayerIndex), targetHose, Time.deltaTime / blendDuration));
+                if (wantsHose) targetWeight = 0f;
+            }
             float weight = animator.GetLayerWeight(carryLayerIndex);
             float nextWeight = blendDuration <= 0f ? targetWeight :
                 Mathf.MoveTowards(weight, targetWeight, Time.deltaTime / blendDuration);
@@ -82,6 +99,9 @@ namespace HPlayer
             if (initialized && animator && animator.runtimeAnimatorController &&
                 carryLayerIndex > 0 && carryLayerIndex < animator.layerCount)
                 animator.SetLayerWeight(carryLayerIndex, 0f);
+            if (initialized && animator && animator.runtimeAnimatorController &&
+                hoseLayerIndex > 0 && hoseLayerIndex < animator.layerCount)
+                animator.SetLayerWeight(hoseLayerIndex, 0f);
         }
     }
 }

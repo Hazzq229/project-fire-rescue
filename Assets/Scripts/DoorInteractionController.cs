@@ -5,6 +5,7 @@ using UnityEngine;
 namespace HPlayer
 {
     [RequireComponent(typeof(Rigidbody), typeof(LocalPlayerInput))]
+    [AddComponentMenu("TA/Adaptive Animation/Object Interaction Controller")]
     public class DoorInteractionController : MonoBehaviour
     {
         [SerializeField] private Animator animator;
@@ -14,6 +15,7 @@ namespace HPlayer
         private LocalPlayerInput localInput;
         [SerializeField] private string idleStatePath = "Base Layer.Idle 0";
         [SerializeField, Min(1f)] private float maxActionSeconds = 8f;
+        [SerializeField, Min(.05f)] private float alignmentDuration = .2f;
         [Header("State names AND Trigger names must match")]
         [SerializeField] private string openFrontAnimation = "DoorPush";
         [SerializeField] private string openBackAnimation = "DoorPull";
@@ -23,8 +25,11 @@ namespace HPlayer
         public bool IsInteractingWithDoor { get; private set; }
         // Alias bagi pengguna kode versi lama: true juga ketika menutup.
         public bool IsOpeningDoor => IsInteractingWithDoor;
+        // Legacy class/serialized references are retained for all existing door scenes.
+        public bool IsInteractingWithObject => IsInteractingWithDoor;
+        public ObjectInteractionTarget ActiveTarget => activeDoor;
         private Rigidbody body;
-        private DoorInteractable activeDoor;
+        private ObjectInteractionTarget activeDoor;
         private Transform selectedPoint;
         private bool entered, contactReceived, requested, stateExited;
         private float startedAt, requestedAt;
@@ -37,6 +42,7 @@ namespace HPlayer
             localInput = GetComponent<LocalPlayerInput>();
             if (!playerController) playerController = GetComponent<ThirdPersonPlayerController>();
             if (!interactionController) interactionController = GetComponent<InteractionController>();
+            if (!animator) animator = GetComponentInChildren<Animator>();
         }
 
         private void Update()
@@ -58,7 +64,7 @@ namespace HPlayer
                     CancelAction("Door: aksi terlalu lama. Periksa transition keluar dan durasi pintu.");
                 return;
             }
-            if (localInput && localInput.DoorPressed)
+            if (localInput && localInput.ObjectInteractPressed)
                 TryInteract();
         }
 
@@ -82,17 +88,18 @@ namespace HPlayer
                 interactionController.ExternalInteractionLocked || body.isKinematic) return;
             if (animator.IsInTransition(0)) return;
 
-            DoorInteractable nearest = null;
+            ObjectInteractionTarget nearest = null;
             Transform pointFound = null;
             bool frontFound = true;
+            int pointIndex = 0;
             float best = interactionDistance * interactionDistance;
-            foreach (var door in DoorInteractable.ActiveDoors)
+            foreach (var door in ObjectInteractionTarget.ActiveTargets)
             {
                 if (!door || !door.Available) continue;
-                for (int side = 0; side < 2; side++)
+                for (int side = 0; side < door.InteractionPointCount; side++)
                 {
                     bool front = side == 0;
-                    Transform point = door.GetInteractionPoint(front);
+                    Transform point = door.GetInteractionPoint(side);
                     if (!point || Mathf.Abs(point.position.y - body.position.y) > 0.25f) continue;
                     Vector3 delta = point.position - body.position;
                     delta.y = 0f;
@@ -105,11 +112,12 @@ namespace HPlayer
                     nearest = door;
                     pointFound = point;
                     frontFound = front;
+                    pointIndex = side;
                 }
             }
             if (!nearest) return;
-            bool wantsOpen = !nearest.IsOpen;
-            string animationName = AnimationFor(wantsOpen, frontFound);
+            bool wantsOpen = !nearest.ActiveState;
+            string animationName = nearest.AnimationFor(wantsOpen, pointIndex) ?? AnimationFor(wantsOpen, frontFound);
             if (string.IsNullOrWhiteSpace(animationName)) return;
             int stateHash = Animator.StringToHash("Base Layer." + animationName);
             int triggerHash = Animator.StringToHash(animationName);
@@ -151,10 +159,18 @@ namespace HPlayer
             destination.y = body.position.y;
             // Snapshot posisi/rotasi sebelum engsel mulai bergerak.
             // Player tidak mengikuti InteractionPoint yang berputar bersama engsel.
-            body.position = destination;
             Vector3 forward = selectedPoint.forward;
             forward.y = 0f;
-            if (forward.sqrMagnitude > 0.001f) body.rotation = Quaternion.LookRotation(forward);
+            Vector3 start = body.position;
+            Quaternion rotation = body.rotation;
+            Quaternion target = forward.sqrMagnitude > .001f ? Quaternion.LookRotation(forward) : rotation;
+            for (float elapsed = 0f; elapsed < alignmentDuration; elapsed += Time.fixedDeltaTime)
+            {
+                float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((elapsed + Time.fixedDeltaTime) / alignmentDuration));
+                body.MovePosition(Vector3.Lerp(start, destination, t));
+                body.MoveRotation(Quaternion.Slerp(rotation, target, t));
+                yield return new WaitForFixedUpdate();
+            }
             requested = true;
             requestedAt = Time.time;
             animator.ResetTrigger(activeTriggerHash);
@@ -172,7 +188,7 @@ namespace HPlayer
             if (!IsInteractingWithDoor || !entered || stateExited || contactReceived) return;
             contactReceived = true;
             if (!activeDoor || !activeDoor.PerformReservedAction(this))
-                Debug.LogWarning("Door_Contact diterima tetapi aksi pintu ditolak.", this);
+                Debug.LogWarning("Object contact diterima tetapi aksi objek ditolak.", this);
         }
 
         public void StateExited(int stateHash)

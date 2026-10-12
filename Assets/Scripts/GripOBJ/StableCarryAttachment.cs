@@ -11,6 +11,8 @@ namespace HInteractions
     {
         [Tooltip("Posisi pusat objek relatif terhadap CarryAnchor. Mulai dari nol.")]
         [SerializeField] private Vector3 localCarryOffset = Vector3.zero;
+        public void ConfigureOffset(Vector3 offset) => localCarryOffset = offset;
+        public bool DynamicOnRelease { get; set; }
 
         // Reset juga saat Enter Play Mode memakai Domain Reload OFF.
         private static bool applicationQuitting;
@@ -123,6 +125,12 @@ namespace HInteractions
 
         private void ApplyPose()
         {
+            if (owner && owner.IsPlacingDown)
+            {
+                transform.position = owner.PlacementPosition;
+                Physics.SyncTransforms();
+                return;
+            }
             transform.localPosition = localCarryOffset;
             transform.localRotation = carryRotation;
             Physics.SyncTransforms();
@@ -142,8 +150,8 @@ namespace HInteractions
             {
                 body.position = transform.position;
                 body.rotation = transform.rotation;
-                body.isKinematic = savedKinematic;
-                body.useGravity = savedGravity;
+                body.isKinematic = DynamicOnRelease ? false : savedKinematic;
+                body.useGravity = DynamicOnRelease || savedGravity;
                 body.drag = savedDrag;
                 body.angularDrag = savedAngularDrag;
                 body.interpolation = savedInterpolation;

@@ -115,7 +115,7 @@ namespace TA.AdaptiveAnimation
                 FadeOut("Objek tanpa provider aktif", left, right);
                 return;
             }
-            if (!provider.TryGetGripPoints(out Vector3 a, out Vector3 b) ||
+            if (!provider.TryGetGripPoints(interactionController, out Vector3 a, out Vector3 b) ||
                 !IsFinite(a) || !IsFinite(b))
             {
                 FadeOut("Titik pegangan tidak valid", left, right);
@@ -193,7 +193,7 @@ namespace TA.AdaptiveAnimation
                 rotationStatus = "Profil belum dikalibrasi atau gaya pegangan berbeda";
                 return;
             }
-            if (!provider.TryGetGripRotations(out Quaternion a, out Quaternion b))
+            if (!provider.TryGetGripRotations(interactionController, out Quaternion a, out Quaternion b))
             {
                 var boxProvider = provider as BoxGripProvider;
                 rotationStatus = boxProvider && boxProvider.SharedOrientationProfile

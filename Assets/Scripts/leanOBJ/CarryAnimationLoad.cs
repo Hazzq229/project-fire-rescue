@@ -8,6 +8,7 @@ namespace TA.AdaptiveAnimation
     {
         [Tooltip("Bobot objek untuk adaptasi animasi. Tidak mengubah Rigidbody Mass.")]
         [SerializeField, Min(0f)] private float weightKg = 10f;
+        public void Configure(float kilograms) => weightKg = Mathf.Max(0f, kilograms);
         public float WeightKg => float.IsNaN(weightKg) || float.IsInfinity(weightKg)
             ? 0f : Mathf.Max(0f, weightKg);
     }

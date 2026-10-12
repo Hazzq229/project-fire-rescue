@@ -28,11 +28,20 @@ namespace HGame.Objects
         [SerializeField, ReadOnly] private bool isShooting;
 
         private Liftable liftable;
+        private TA.AdaptiveAnimation.CooperativeFireHose cooperative;
+        private float flow = 1f, baseSpawnRate, baseFrontForce;
         public bool IsShooting => isShooting;
+        public float Flow => isShooting ? flow : 0f;
 
         private void Awake()
         {
             liftable = GetComponent<Liftable>();
+            cooperative = GetComponent<TA.AdaptiveAnimation.CooperativeFireHose>();
+            if (waterFX)
+            {
+                baseSpawnRate = waterFX.HasFloat("SpawnRate") ? waterFX.GetFloat("SpawnRate") : 100f;
+                baseFrontForce = waterFX.HasFloat("FrontForce") ? waterFX.GetFloat("FrontForce") : waterSpeed;
+            }
             if (!liftable)
                 Debug.LogError("HoseWaterController harus satu GameObject dengan PhysicCableCon/Liftable.", this);
 
@@ -62,6 +71,25 @@ namespace HGame.Objects
         }
 
         public void SetShooting(bool value)
+        {
+            // Legacy tool toggles cannot bypass the two-operator pressure controller.
+            if (value && cooperative) return;
+            SetWaterState(value);
+        }
+
+        public void SetCooperativeFlow(float pressure)
+        {
+            if (!cooperative) return;
+            flow = cooperative.ReadyToSpray ? Mathf.Clamp(pressure, 0f, 1.25f) : 0f;
+            if (waterFX)
+            {
+                if (waterFX.HasFloat("SpawnRate")) waterFX.SetFloat("SpawnRate", baseSpawnRate * flow);
+                if (waterFX.HasFloat("FrontForce")) waterFX.SetFloat("FrontForce", baseFrontForce * Mathf.Sqrt(flow));
+            }
+            SetWaterState(flow > .02f);
+        }
+
+        private void SetWaterState(bool value)
         {
             if (value)
             {
@@ -106,7 +134,7 @@ namespace HGame.Objects
                 return;
             }
 
-            if (enableFireExtinguishing)
+            if (isShooting && enableFireExtinguishing)
             {
                 HandleFireExtinguishing();
             }
@@ -118,7 +146,7 @@ namespace HGame.Objects
                 return;
 
             Vector3 startPos = raycastOrigin.position;
-            Vector3 currentVelocity = raycastOrigin.forward * waterSpeed;
+            Vector3 currentVelocity = raycastOrigin.forward * waterSpeed * Mathf.Sqrt(flow);
 
             for (int i = 0; i < segmentCount; i++)
             {
@@ -135,16 +163,22 @@ namespace HGame.Objects
                     Color.blue
                 );
 
-                if (Physics.Linecast(
-                    startPos,
-                    nextPos,
-                    out RaycastHit hit))
+                RaycastHit[] hits = Physics.RaycastAll(startPos, (nextPos - startPos).normalized,
+                    Vector3.Distance(startPos, nextPos), ~0, QueryTriggerInteraction.Collide);
+                System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+                foreach (var hit in hits)
                 {
-                    if (hit.collider.TryGetComponent(out Fire fire))
-                        fire.TryExtinguish(extinguishRate * Time.fixedDeltaTime);
-
-                    // Air berhenti ketika mengenai objek pertama.
-                    //break;
+                    if (hit.collider.transform.IsChildOf(transform) ||
+                        hit.collider.GetComponentInParent<HPlayer.InteractionController>() ||
+                        (cooperative && hit.collider.GetComponentInParent<HPhysic.PhysicCable>())) continue;
+                    var fire = hit.collider.GetComponentInParent<Fire>();
+                    if (fire && fire.isActiveAndEnabled)
+                    {
+                        fire.TryExtinguish(extinguishRate * flow * Time.fixedDeltaTime);
+                        return;
+                    }
+                    // Triggers such as the unchanged FireSpawner volume do not block the stream.
+                    if (!hit.collider.isTrigger) return;
                 }
 
                 startPos = nextPos;

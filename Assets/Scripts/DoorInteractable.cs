@@ -4,7 +4,7 @@ using UnityEngine.Serialization;
 
 namespace HGame.Objects
 {
-    public class DoorInteractable : MonoBehaviour
+    public class DoorInteractable : ObjectInteractionTarget
     {
         public static readonly HashSet<DoorInteractable> ActiveDoors = new HashSet<DoorInteractable>();
         [SerializeField] private Rigidbody hingeBody;
@@ -21,8 +21,12 @@ namespace HGame.Objects
         [SerializeField, Min(0.05f)] private float closeDuration = 0.5f;
 
         public bool IsOpen { get; private set; }
-        public bool IsMoving { get; private set; }
-        public bool Available => isActiveAndEnabled && hingeBody && !IsMoving && !owner;
+        private bool moving;
+        public override bool IsMoving => moving;
+        public override bool ActiveState => IsOpen;
+        public override int InteractionPointCount => 2;
+        public override Transform GetInteractionPoint(int index) => GetInteractionPoint(index == 0);
+        public override bool Available => isActiveAndEnabled && hingeBody && !IsMoving && !owner;
         private Quaternion closedRotation;
         private Quaternion openedRotation;
         private Quaternion fromRotation;
@@ -49,8 +53,9 @@ namespace HGame.Objects
             openedRotation = closedRotation * Quaternion.Euler(0f, openAngle, 0f);
         }
 
-        private void OnEnable()
+        protected override void OnEnable()
         {
+            base.OnEnable();
             if (hingeBody && closedFrontPoint && closedBackPoint && openFrontPoint && openBackPoint)
                 ActiveDoors.Add(this);
         }
@@ -61,7 +66,7 @@ namespace HGame.Objects
             return front ? closedFrontPoint : closedBackPoint;
         }
 
-        public bool TryReserve(MonoBehaviour requester, bool wantsOpen)
+        public override bool TryReserve(MonoBehaviour requester, bool wantsOpen)
         {
             if (!requester || !Available || wantsOpen == IsOpen) return false;
             owner = requester;
@@ -69,21 +74,21 @@ namespace HGame.Objects
             return true;
         }
 
-        public void Release(MonoBehaviour requester)
+        public override void Release(MonoBehaviour requester)
         {
             if (owner == requester) owner = null;
         }
 
-        public bool PerformReservedAction(MonoBehaviour requester)
+        public override bool PerformReservedAction(MonoBehaviour requester)
         {
-            if (!isActiveAndEnabled || !hingeBody || owner != requester || IsMoving ||
+            if (!isActiveAndEnabled || !hingeBody || !owner || owner != requester || IsMoving ||
                 reservedOpen == IsOpen) return false;
             targetOpen = reservedOpen;
             fromRotation = hingeBody.rotation;
             targetRotation = targetOpen ? openedRotation : closedRotation;
             duration = Mathf.Max(0.05f, targetOpen ? openDuration : closeDuration);
             elapsed = 0f;
-            IsMoving = true;
+            moving = true;
             return true;
         }
 
@@ -97,17 +102,18 @@ namespace HGame.Objects
             if (t >= 1f)
             {
                 IsOpen = targetOpen;
-                IsMoving = false;
+                moving = false;
             }
         }
 
-        private void OnDisable()
+        protected override void OnDisable()
         {
+            base.OnDisable();
             ActiveDoors.Remove(this);
             owner = null;
             // Jika terhenti di tengah, kembalikan ke keadaan terakhir yang selesai.
             if (IsMoving && hingeBody) hingeBody.rotation = IsOpen ? openedRotation : closedRotation;
-            IsMoving = false;
+            moving = false;
         }
 
         private void OnDrawGizmosSelected()

@@ -11,6 +11,8 @@ namespace TA.AdaptiveAnimation
         // Nama field lama dipertahankan agar referensi dan controller kompatibel.
         public Transform chest;
         [SyncSceneToStream, Range(-BodyLeanConstraint.MaxSupportedAngle, BodyLeanConstraint.MaxSupportedAngle)] public float angleDegrees;
+        // World-space rotation vector (axis * degrees), independent of the character's carry role.
+        [SyncSceneToStream] public Vector3 effortRotationWorld;
 
         [Tooltip("Opsional: spine.001. Harus merupakan leluhur Chest.")]
         public Transform lowerSpine;
@@ -33,6 +35,7 @@ namespace TA.AdaptiveAnimation
         {
             chest = lowerSpine = neck = null;
             angleDegrees = 0f;
+            effortRotationWorld = Vector3.zero;
             lowerSpineShare = 0.6f;
             neckCompensation = 0.8f;
         }
@@ -46,6 +49,7 @@ namespace TA.AdaptiveAnimation
         public bool hasLowerSpine;
         public bool hasNeck;
         public FloatProperty angle;
+        public Vector3Property effort;
         public FloatProperty lowerShare;
         public FloatProperty neckCorrection;
         public FloatProperty jobWeight { get; set; }
@@ -56,6 +60,13 @@ namespace TA.AdaptiveAnimation
         {
             bone.SetLocalRotation(stream,
                 bone.GetLocalRotation(stream) * Quaternion.AngleAxis(degrees, Vector3.right));
+        }
+
+        private static void AddWorldEffort(AnimationStream stream, ReadWriteTransformHandle bone, Vector3 rotation)
+        {
+            float magnitude = rotation.magnitude;
+            if (magnitude < .0001f) return;
+            bone.SetRotation(stream, Quaternion.AngleAxis(magnitude, rotation / magnitude) * bone.GetRotation(stream));
         }
 
         public void ProcessAnimation(AnimationStream stream)
@@ -71,13 +82,24 @@ namespace TA.AdaptiveAnimation
 
             float degrees = Mathf.Clamp(angle.Get(stream), -BodyLeanConstraint.MaxSupportedAngle, BodyLeanConstraint.MaxSupportedAngle) * influence;
             float share = hasLowerSpine ? Mathf.Clamp01(lowerShare.Get(stream)) : 0f;
+            Vector3 effortRotation = Vector3.ClampMagnitude(effort.Get(stream), 12f) * influence;
 
             // Diproses dari induk ke anak. Jumlah sudut lokal tetap sebesar input.
-            if (hasLowerSpine) AddLocalX(stream, lowerSpine, degrees * share);
+            if (hasLowerSpine)
+            {
+                AddLocalX(stream, lowerSpine, degrees * share);
+                AddWorldEffort(stream, lowerSpine, effortRotation * share);
+            }
             AddLocalX(stream, chest, degrees * (1f - share));
+            AddWorldEffort(stream, chest, effortRotation * (1f - share));
             // Koreksi perkiraan pada sumbu lokal yang sudah dikalibrasi pengguna.
             // Bukan pengunci pandangan dunia: sumbu bisa berbeda saat pose berubah.
-            if (hasNeck) AddLocalX(stream, neck, -degrees * Mathf.Clamp01(neckCorrection.Get(stream)));
+            if (hasNeck)
+            {
+                float compensation = Mathf.Clamp01(neckCorrection.Get(stream));
+                AddLocalX(stream, neck, -degrees * compensation);
+                AddWorldEffort(stream, neck, -effortRotation * compensation);
+            }
         }
     }
 
@@ -92,6 +114,8 @@ namespace TA.AdaptiveAnimation
                 hasNeck = data.neck != null,
                 angle = FloatProperty.Bind(animator, component,
                     ConstraintsUtils.ConstructConstraintDataPropertyName(nameof(BodyLeanData.angleDegrees))),
+                effort = Vector3Property.Bind(animator, component,
+                    ConstraintsUtils.ConstructConstraintDataPropertyName(nameof(BodyLeanData.effortRotationWorld))),
                 lowerShare = FloatProperty.Bind(animator, component,
                     ConstraintsUtils.ConstructConstraintDataPropertyName(nameof(BodyLeanData.lowerSpineShare))),
                 neckCorrection = FloatProperty.Bind(animator, component,
@@ -115,6 +139,15 @@ namespace TA.AdaptiveAnimation
             if (float.IsNaN(degrees) || float.IsInfinity(degrees)) degrees = 0f;
             var value = data;
             value.angleDegrees = Mathf.Clamp(degrees, -MaxSupportedAngle, MaxSupportedAngle);
+            data = value;
+        }
+
+        public void SetEffort(Vector3 worldRotation)
+        {
+            if (!float.IsFinite(worldRotation.x) || !float.IsFinite(worldRotation.y) || !float.IsFinite(worldRotation.z))
+                worldRotation = Vector3.zero;
+            var value = data;
+            value.effortRotationWorld = Vector3.ClampMagnitude(worldRotation, 12f);
             data = value;
         }
     }

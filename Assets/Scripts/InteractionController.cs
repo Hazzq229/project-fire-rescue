@@ -41,6 +41,11 @@ namespace HPlayer
         [field: SerializeField, ReadOnly]
         public bool Interacting { get; private set; }
         public bool IsPickingUp { get; private set; }
+        public bool IsPlacingDown { get; private set; }
+        private Vector3 placementStart, placementTarget;
+        private float placementContactTime = .763f;
+        private bool placementWasKinematic;
+        public Vector3 PlacementPosition { get; private set; }
         public bool ExternalInteractionLocked { get; set; }
 
         [SerializeField] private ThirdPersonPlayerController playerController;
@@ -61,6 +66,10 @@ namespace HPlayer
 
         public Interactable SelectedObject =>
             currentCandidate != null ? currentCandidate : HeldObject;
+        public TA.AdaptiveAnimation.CarryRole CurrentCarryRole =>
+            HeldObject is TA.AdaptiveAnimation.CooperativeHoseGrip hoseGrip ? hoseGrip.Role :
+            HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject coop
+                ? coop.GetRole(this) : TA.AdaptiveAnimation.CarryRole.None;
 
         private void Awake()
         {
@@ -74,6 +83,7 @@ namespace HPlayer
         private void Update()
         {
             RefreshCandidate();
+            UpdatePlacement();
             if (IsPickingUp && !pickupEntered &&
                 Time.time - pickupRequestedAt > pickupStartTimeout)
             {
@@ -88,8 +98,9 @@ namespace HPlayer
                 return;
             }
             if (localInput.GrabPressed) BeginInteraction();
+            if (localInput.ThrowPressed) ThrowHeldObject();
             if (!localInput.GrabHeld) EndInteraction();
-            if (localInput.ToolPressed)
+            if (localInput.ToolPressed && !(HeldObject is TA.AdaptiveAnimation.CooperativeHoseGrip))
             {
                 if (IsPickingUp || ExternalInteractionLocked)
                 {
@@ -126,6 +137,8 @@ namespace HPlayer
                 return;
             }
 
+            if (IsPlacingDown) return;
+
             // Dibaca ulang sehingga seluruh pemegang mengikuti perubahan jumlah holder.
             if (playerController)
                 playerController.SetMovementState(HeldObject.SpeedPenalty,
@@ -150,7 +163,7 @@ namespace HPlayer
             Interacting = true;
             if (!IsPickingUp)
             {
-                if (HeldObject) DropObject(HeldObject, true);
+                if (HeldObject) BeginPlaceDown();
                 else
                 {
                     RefreshCandidate();
@@ -170,6 +183,7 @@ namespace HPlayer
         private void BeginPickup(Liftable obj)
         {
             if (!obj || !obj.CanBePickedUp() || obj.Holders.Contains(this)) return;
+            if (obj is TA.AdaptiveAnimation.CooperativeCarryObject coop && !coop.CanJoin(this)) return;
             if (!handTransform || !handTrigger || !playerController || !animator ||
                 !animator.isActiveAndEnabled || !animator.runtimeAnimatorController)
             {
@@ -213,6 +227,11 @@ namespace HPlayer
         {
             if (!IsPickingUp || !pickupEntered || grabEventReceived) return;
             grabEventReceived = true;
+            if (IsPlacingDown)
+            {
+                CompletePlacement();
+                return;
+            }
             Liftable obj = pendingObject;
             pendingObject = null;
             // Cek ulang: bisa saja sudah diambil pemain lain sebelum frame kontak.
@@ -234,6 +253,8 @@ namespace HPlayer
 
         private void FinishPickup()
         {
+            if (IsPlacingDown && HeldObject) DropObject(HeldObject);
+            IsPlacingDown = false;
             IsPickingUp = false;
             pickupEntered = false;
             pendingObject = null;
@@ -270,6 +291,9 @@ namespace HPlayer
 
         private void PickUpObject(Liftable obj)
         {
+            // Recheck ownership before capturing attachment state or creating any joint.
+            if (!obj || HeldObject || !obj.isActiveAndEnabled || !obj.CanBePickedUp() ||
+                (obj.SupportsStableSingleCarry && obj.Holders.Count != 0)) return;
             StableCarryAttachment attachment = obj.GetComponent<StableCarryAttachment>();
             if (attachment && attachment.isActiveAndEnabled)
             {
@@ -287,6 +311,7 @@ namespace HPlayer
             if (!obj.Holders.Contains(this)) return;
             HeldObject = obj;
             currentCandidate = null;
+            if (obj is TA.AdaptiveAnimation.CooperativeCarryObject || obj is TA.AdaptiveAnimation.CooperativeHoseGrip) return;
             if (attachment)
             {
                 stableCarry = attachment;
@@ -312,6 +337,7 @@ namespace HPlayer
 
         private void RotateHeldObjectPhysics()
         {
+            if (HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject || HeldObject is TA.AdaptiveAnimation.CooperativeHoseGrip) return;
             if (!HeldObject || !HeldObject.Rigidbody || !PhysicsAnchor) return;
             // Satu pengendali rotasi mencegah torque kedua pemain saling melawan.
             if (HeldObject.Holders.Count > 0 &&
@@ -337,8 +363,11 @@ namespace HPlayer
             // Callback Liftable selesai dahulu, lalu pulihkan keadaan sebelum pickup.
             obj.Drop(this);
             if (attachment) attachment.EndCarry(releaseVelocity);
+            else if (IsPlacingDown && !(obj is TA.AdaptiveAnimation.CooperativeCarryObject))
+                obj.Rigidbody.isKinematic = placementWasKinematic;
             // Jika masih dipegang partner, hanya lepas; jangan lempar objek bersama.
-            if (throwObject && obj.Holders.Count == 0 && playerRb && obj.Rigidbody && !obj.Rigidbody.isKinematic)
+            if (throwObject && !(obj is TA.AdaptiveAnimation.CooperativeCarryObject) &&
+                obj.Holders.Count == 0 && playerRb && obj.Rigidbody && !obj.Rigidbody.isKinematic)
             {
 #if UNITY_6000_0_OR_NEWER
                 obj.Rigidbody.linearVelocity = playerRb.linearVelocity + transform.forward * throwForce;
@@ -353,6 +382,114 @@ namespace HPlayer
         public void ReleaseHeldObject()
         {
             if (HeldObject) DropObject(HeldObject);
+        }
+
+        public void ThrowHeldObject()
+        {
+            if (!isActiveAndEnabled || IsPickingUp || ExternalInteractionLocked || !HeldObject) return;
+            if (HeldObject is TA.AdaptiveAnimation.CooperativeHoseGrip) { ReleaseHeldObject(); return; }
+            if (HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject) BeginPlaceDown();
+            else DropObject(HeldObject, true);
+        }
+
+        public void BeginPlaceDown()
+        {
+            if (HeldObject is TA.AdaptiveAnimation.CooperativeHoseGrip && !IsPickingUp)
+            { ReleaseHeldObject(); return; }
+            if (!HeldObject || IsPickingUp || ExternalInteractionLocked || !animator ||
+                !animator.HasState(0, PickupStateId)) return;
+            var holders = HeldObject.Holders.ToArray();
+            foreach (var holder in holders)
+                if (holder is InteractionController partner && (partner.IsPickingUp || partner.ExternalInteractionLocked)) return;
+            foreach (var holder in holders)
+                if (holder is InteractionController partner) partner.BeginPlaceLocal();
+        }
+
+        private void BeginPlaceLocal()
+        {
+            IsPlacingDown = IsPickingUp = true;
+            pickupEntered = grabEventReceived = false;
+            pickupRequestedAt = Time.time;
+            placementStart = PlacementPosition = HeldObject.transform.position;
+            placementTarget = GroundPlacement(HeldObject);
+            placementWasKinematic = HeldObject.Rigidbody.isKinematic;
+            foreach (var clip in animator.runtimeAnimatorController.animationClips)
+                foreach (var evt in clip.events)
+                    if (evt.functionName == "Pickup_Grab") placementContactTime = evt.time / clip.length;
+            DestroyGrabJoint();
+            if (!(HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject))
+                HeldObject.Rigidbody.isKinematic = true;
+            playerController.SetMovementLocked(true);
+            animator.ResetTrigger(PickupId);
+            animator.SetTrigger(PickupId);
+        }
+
+        private Vector3 GroundPlacement(Liftable item)
+        {
+            var bounds = new Bounds(item.transform.position, Vector3.zero);
+            foreach (var col in item.GetComponentsInChildren<Collider>())
+                if (!col.isTrigger) bounds.Encapsulate(col.bounds);
+            Vector3 point = item.transform.position;
+            Vector3 offset = Vector3.zero;
+            if (item.SupportsStableSingleCarry)
+            {
+                var capsule = GetComponent<CapsuleCollider>();
+                Vector3 forward = transform.forward;
+                float extent = Mathf.Abs(forward.x) * bounds.extents.x + Mathf.Abs(forward.z) * bounds.extents.z;
+                float clearance = (capsule ? capsule.radius * transform.lossyScale.x : .3f) + extent + .04f;
+                float distance = Vector3.Dot(bounds.center - transform.position, forward);
+                offset = forward * Mathf.Max(0f, clearance - distance);
+                point += offset;
+            }
+            float bottomOffset = point.y - bounds.min.y;
+            float nearest = float.PositiveInfinity;
+            foreach (var hit in Physics.RaycastAll(new Vector3(bounds.center.x + offset.x, bounds.max.y + .1f, bounds.center.z + offset.z),
+                Vector3.down, 5f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (hit.collider.transform.IsChildOf(item.transform) ||
+                    hit.collider.GetComponentInParent<InteractionController>() || hit.normal.y < .7f) continue;
+                if (hit.distance >= nearest) continue;
+                nearest = hit.distance;
+                point.y = hit.point.y + bottomOffset + .01f;
+            }
+            return point;
+        }
+
+        private void UpdatePlacement()
+        {
+            if (!IsPlacingDown || !HeldObject || !pickupEntered || grabEventReceived) return;
+            var state = animator.GetCurrentAnimatorStateInfo(0);
+            if (state.fullPathHash != PickupStateId) return;
+            float t = Mathf.Clamp01(state.normalizedTime / Mathf.Max(.01f, placementContactTime));
+            PlacementPosition = Vector3.Lerp(placementStart, placementTarget, Mathf.SmoothStep(0f, 1f, t));
+            ApplyPlacementPosition();
+        }
+
+        private void ApplyPlacementPosition()
+        {
+            if (!HeldObject || HeldObject.Holders.Count == 0 || !ReferenceEquals(HeldObject.Holders[0], this)) return;
+            HeldObject.transform.position = PlacementPosition;
+            HeldObject.Rigidbody.position = PlacementPosition;
+        }
+
+        private void CompletePlacement()
+        {
+            if (!HeldObject) return;
+            var item = HeldObject;
+            // Either animation may deliver its contact event first; one owner commits the shared pose.
+            if (item.Holders.Count > 0 && item.Holders[0] is InteractionController first && first != this)
+            {
+                first.CompletePlacement();
+                return;
+            }
+            PlacementPosition = placementTarget;
+            ApplyPlacementPosition();
+            DropObject(item);
+            if (!item.Rigidbody.isKinematic)
+            {
+                item.Rigidbody.velocity = Vector3.zero;
+                item.Rigidbody.angularVelocity = Vector3.zero;
+            }
         }
 
         private void DestroyGrabJoint()

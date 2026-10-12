@@ -20,6 +20,11 @@ namespace TA.AdaptiveAnimation
         [Tooltip("Batas awal konservatif 5 derajat. Naikkan bertahap setelah kontak tangan diperiksa.")]
         [SerializeField, Range(0f, BodyLeanConstraint.MaxSupportedAngle)] private float maximumAngle = 5f;
         [SerializeField, Min(1f)] private float degreesPerSecond = 20f;
+        [Header("Cooperative effort")]
+        [SerializeField, Range(0f, 12f)] private float conflictLeanDegrees = 8f;
+        [Tooltip("Keep cooperative grip reachable when one player bears the whole heavy load.")]
+        [SerializeField, Range(0f, 60f)] private float cooperativeLoadAngleLimit = 25f;
+        [SerializeField] private Vector3 currentEffortRotation;
 
         [Header("Pengujian arah - matikan setelah selesai")]
         [SerializeField] private bool manualPreview;
@@ -49,11 +54,14 @@ namespace TA.AdaptiveAnimation
         {
             currentAngle = targetAngle = currentLoadKg = 0f;
             if (bodyLean) bodyLean.SetAngle(0f);
+            currentEffortRotation = Vector3.zero;
+            if (bodyLean) bodyLean.SetEffort(Vector3.zero);
         }
 
         private void Update()
         {
             targetAngle = currentLoadKg = 0f;
+            Vector3 targetEffort = Vector3.zero;
             if (!bodyLean || !bodyLean.data.chest)
             {
                 if (bodyLean) bodyLean.SetAngle(0f);
@@ -70,6 +78,8 @@ namespace TA.AdaptiveAnimation
                 status = "Interaction Controller tidak tersedia";
             else if (!interactionController.HeldObject || !interactionController.HeldObject.isActiveAndEnabled)
                 status = "Tidak memegang objek: kembali ke pose dasar";
+            else if (interactionController.IsPlacingDown)
+                status = "Meletakkan: mengikuti gerak membungkuk dari clip pickup";
             else
             {
                 var load = interactionController.HeldObject.GetComponent<CarryAnimationLoad>();
@@ -79,24 +89,45 @@ namespace TA.AdaptiveAnimation
                     status = "Kurva bobot belum diisi";
                 else
                 {
-                    currentLoadKg = load.WeightKg;
+                    var coop = interactionController.HeldObject as CooperativeCarryObject;
+                    currentLoadKg = coop ? coop.LoadPerPlayerKg : load.WeightKg;
                     targetAngle = weightToAngle.Evaluate(currentLoadKg)
                         * (positiveXBendsForward ? 1f : -1f);
+                    if (coop)
+                    {
+                        targetAngle = Mathf.Clamp(targetAngle, -cooperativeLoadAngleLimit, cooperativeLoadAngleLimit);
+                        targetEffort = Vector3.Cross(Vector3.up, coop.GetEffortDirection(interactionController)) * conflictLeanDegrees;
+                    }
                     status = "Mengikuti bobot objek";
                 }
             }
+            if (interactionController && interactionController.HeldObject is CooperativeHoseGrip hoseGrip && hoseGrip.Hose)
+            {
+                targetAngle = hoseGrip.Hose.Pressure * (hoseGrip.Role == CarryRole.Front ? 9f : 4f);
+                status = "Menahan tekanan fire hose";
+            }
             if (float.IsNaN(targetAngle) || float.IsInfinity(targetAngle)) targetAngle = 0f;
+            if (interactionController && interactionController.TryGetComponent<ThirdPersonPlayerController>(out var mover) && mover.IsKnockedBack)
+            {
+                targetAngle = -18f;
+                status = "Dorongan balik fire hose";
+            }
             float limit = Mathf.Clamp(maximumAngle, 0f, BodyLeanConstraint.MaxSupportedAngle);
             targetAngle = Mathf.Clamp(targetAngle, -limit, limit);
             currentAngle = Mathf.MoveTowards(currentAngle, targetAngle,
                 Mathf.Max(1f, degreesPerSecond) * Time.deltaTime);
             bodyLean.SetAngle(currentAngle);
+            currentEffortRotation = Vector3.MoveTowards(currentEffortRotation, targetEffort,
+                Mathf.Max(1f, degreesPerSecond) * Time.deltaTime);
+            bodyLean.SetEffort(currentEffortRotation);
         }
 
         private void OnDisable()
         {
             currentAngle = targetAngle = currentLoadKg = 0f;
             if (bodyLean) bodyLean.SetAngle(0f);
+            currentEffortRotation = Vector3.zero;
+            if (bodyLean) bodyLean.SetEffort(Vector3.zero);
         }
     }
 }

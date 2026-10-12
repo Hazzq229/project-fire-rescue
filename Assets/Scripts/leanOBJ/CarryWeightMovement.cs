@@ -8,6 +8,7 @@ namespace TA.AdaptiveAnimation
     public sealed class CarryWeightMovement : MonoBehaviour
     {
         [SerializeField] private CarryWeightSpeedProfile speedProfile;
+        public void Configure(CarryWeightSpeedProfile profile) => speedProfile = profile;
 
         [Header("Hasil pembacaan terakhir saat dipegang - jangan diedit")]
         [SerializeField] private string status = "Belum dibaca oleh Liftable";
