@@ -1,0 +1,176 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &4805789097486452617
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -5.35
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.8118821
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -3.5357413
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.50242466
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0.864621
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 180
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 119.679
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      propertyPath: m_Name
+      value: Props_Poster_08
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4653020836298864065}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9025861688011675269}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5406660289802878728}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 2cd705eb99078e0479dc149858c53ea2,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5101274558159276128}
+  m_SourcePrefab: {fileID: 100100000, guid: 2cd705eb99078e0479dc149858c53ea2, type: 3}
+--- !u!1 &5652297260100041432 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 2cd705eb99078e0479dc149858c53ea2,
+    type: 3}
+  m_PrefabInstance: {fileID: 4805789097486452617}
+  m_PrefabAsset: {fileID: 0}
+--- !u!65 &4653020836298864065
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5652297260100041432}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.01, y: 0.0015, z: 0.013}
+  m_Center: {x: -0.0000000037550927, y: 0.0000000011641532, z: 0.00049999985}
+--- !u!114 &9025861688011675269
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5652297260100041432}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  type: 0
+  state: 0
+  ignitionPoint: 10
+  burningPoint: 60
+  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
+    type: 3}
+--- !u!54 &5406660289802878728
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5652297260100041432}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
+--- !u!114 &5101274558159276128
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5652297260100041432}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9ef0207d4aaff9d4caff8b520d1bd121, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  <ShowPointerOnInterract>k__BackingField: 1
+  <IsSelected>k__BackingField: 0
+  maxHolders: 1
+  <LiftDirectionOffset>k__BackingField: {x: 0, y: 0, z: 0}
+  defaultSpeedPenalty: 0
+  defaultForceFaceObject: 0
