@@ -11529,7 +11529,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &174975408
 Transform:
   m_ObjectHideFlags: 0
@@ -17322,7 +17322,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &195869662
 Transform:
   m_ObjectHideFlags: 0
@@ -29811,7 +29811,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &300187453
 Transform:
   m_ObjectHideFlags: 0
@@ -37232,7 +37232,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &387914855
 Transform:
   m_ObjectHideFlags: 0
@@ -43728,8 +43728,8 @@ ParticleSystem:
       maxColor: {r: 1, g: 1, b: 1, a: 1}
       maxGradient:
         serializedVersion: 2
-        key0: {r: 1, g: 0.9554453, b: 0, a: 1}
-        key1: {r: 1, g: 0.19999468, b: 0, a: 1}
+        key0: {r: 1, g: 0.67049026, b: 0, a: 1}
+        key1: {r: 1, g: 0.0725602, b: 0, a: 1}
         key2: {r: 0, g: 0, b: 0, a: 0}
         key3: {r: 0, g: 0, b: 0, a: 0}
         key4: {r: 0, g: 0, b: 0, a: 0}
@@ -49005,7 +49005,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &459073302
 Transform:
   m_ObjectHideFlags: 0
@@ -56607,7 +56607,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &536439502
 Transform:
   m_ObjectHideFlags: 0
@@ -62081,7 +62081,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &549034048
 Transform:
   m_ObjectHideFlags: 0
@@ -97247,6 +97247,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   waterFX: {fileID: 1035172210}
+  enableFireExtinguishing: 0
+  extinguishRate: 1
+  raycastOrigin: {fileID: 0}
+  segmentCount: 15
+  waterSpeed: 10
+  timeStep: 0.1
   debugLogs: 1
   isShooting: 0
 --- !u!1001 &914266942
@@ -107015,7 +107021,7 @@ VisualEffect:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1035172207}
   m_Enabled: 1
-  m_Asset: {fileID: 8926484042661614526, guid: 7e7f4e5a090cc4448b3a9b83a2b09c25, type: 3}
+  m_Asset: {fileID: 0}
   m_InitialEventName: OnStop
   m_InitialEventNameOverriden: 1
   m_StartSeed: 0
@@ -113516,7 +113522,7 @@ VisualEffect:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1066675958}
   m_Enabled: 1
-  m_Asset: {fileID: 8926484042661614526, guid: 7e7f4e5a090cc4448b3a9b83a2b09c25, type: 3}
+  m_Asset: {fileID: 0}
   m_InitialEventName: OnStop
   m_InitialEventNameOverriden: 1
   m_StartSeed: 0
@@ -116010,7 +116016,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1128941599
 Transform:
   m_ObjectHideFlags: 0
@@ -129717,7 +129723,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1191561242
 Transform:
   m_ObjectHideFlags: 0
@@ -155373,7 +155379,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1452670495
 Transform:
   m_ObjectHideFlags: 0
@@ -210407,7 +210413,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1834974636
 Transform:
   m_ObjectHideFlags: 0
@@ -227910,6 +227916,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   waterFX: {fileID: 1066675960}
+  enableFireExtinguishing: 0
+  extinguishRate: 1
+  raycastOrigin: {fileID: 0}
+  segmentCount: 15
+  waterSpeed: 10
+  timeStep: 0.1
   debugLogs: 1
   isShooting: 0
 --- !u!4 &2024827088 stripped
@@ -231383,8 +231395,8 @@ ParticleSystem:
       maxColor: {r: 1, g: 1, b: 1, a: 1}
       maxGradient:
         serializedVersion: 2
-        key0: {r: 1, g: 0.9554453, b: 0, a: 1}
-        key1: {r: 1, g: 0.19999468, b: 0, a: 1}
+        key0: {r: 1, g: 0.59160644, b: 0, a: 1}
+        key1: {r: 1, g: 0, b: 0.0058517456, a: 1}
         key2: {r: 0, g: 0, b: 0, a: 0}
         key3: {r: 0, g: 0, b: 0, a: 0}
         key4: {r: 0, g: 0, b: 0, a: 0}
@@ -231392,7 +231404,7 @@ ParticleSystem:
         key6: {r: 0, g: 0, b: 0, a: 0}
         key7: {r: 0, g: 0, b: 0, a: 0}
         ctime0: 0
-        ctime1: 22745
+        ctime1: 24903
         ctime2: 65535
         ctime3: 65535
         ctime4: 0
