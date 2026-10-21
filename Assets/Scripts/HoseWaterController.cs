@@ -171,13 +171,20 @@ namespace HGame.Objects
                     if (hit.collider.transform.IsChildOf(transform) ||
                         hit.collider.GetComponentInParent<HPlayer.InteractionController>() ||
                         (cooperative && hit.collider.GetComponentInParent<HPhysic.PhysicCable>())) continue;
-                    var fire = hit.collider.GetComponentInParent<Fire>();
-                    if (fire && fire.isActiveAndEnabled)
+
+                    float amount = extinguishRate * flow * Time.fixedDeltaTime;
+                    CombustObject combustObj = hit.collider.GetComponentInParent<CombustObject>();
+
+                    if (combustObj != null)
                     {
-                        fire.TryExtinguish(extinguishRate * flow * Time.fixedDeltaTime);
-                        return;
+                        combustObj.ApplyExtinguish(amount);
                     }
-                    // Triggers such as the unchanged FireSpawner volume do not block the stream.
+                    else
+                    {
+                        Vector2Int gridPos = FireManager.Instance.WorldToGrid(hit.point);
+                        FireManager.Instance.ApplyExtinguish(gridPos, amount);
+                    }
+
                     if (!hit.collider.isTrigger) return;
                 }
 

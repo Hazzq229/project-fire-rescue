@@ -9672,7 +9672,6 @@ GameObject:
   - component: {fileID: 4880971545209865299}
   - component: {fileID: 8427293047179374702}
   - component: {fileID: 8177705958306786040}
-  - component: {fileID: 4304860894817827754}
   m_Layer: 0
   m_Name: BigFire
   m_TagString: Untagged
@@ -14515,23 +14514,3 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.609037, y: 4.093033, z: 2.868205}
   m_Center: {x: -0.03686452, y: 0.76950955, z: -0.049676836}
---- !u!114 &4304860894817827754
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8179677174226484149}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2a1ba25ce5fba98aaba907877e070492, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ignitionRate: 20
-  burningRate: 25
-  currentIntensity: 1
-  regenDelay: 2
-  regenRate: 0.4
-  fireParticleSystems:
-  - {fileID: 1608259279245030238}
-  - {fileID: 4732186460547692080}

@@ -4840,7 +4840,6 @@ GameObject:
   m_Component:
   - component: {fileID: 2839121637033308317}
   - component: {fileID: 4681011462671627301}
-  - component: {fileID: 6725877379961713912}
   m_Layer: 0
   m_Name: SmallFire
   m_TagString: Untagged
@@ -4886,26 +4885,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.2230498, y: 1.7328777, z: 1.2867782}
   m_Center: {x: 0.003186524, y: 0.36643887, z: -0.022305012}
---- !u!114 &6725877379961713912
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4258803748790404457}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2a1ba25ce5fba98aaba907877e070492, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ignitionRate: 3
-  burningRate: 10
-  currentIntensity: 1
-  regenDelay: 1.2
-  regenRate: 0.1
-  fireParticleSystems:
-  - {fileID: 6861565854421552355}
-  - {fileID: 3415859931393641755}
 --- !u!1 &8192040277536770294
 GameObject:
   m_ObjectHideFlags: 0

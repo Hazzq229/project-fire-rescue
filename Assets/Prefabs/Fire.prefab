@@ -11,8 +11,8 @@ GameObject:
   - component: {fileID: 8059355706373865519}
   - component: {fileID: 3794607431366458727}
   - component: {fileID: 287895259112392862}
-  - component: {fileID: 434495446948145772}
   - component: {fileID: 7362400635610990909}
+  - component: {fileID: -6756787150905005850}
   m_Layer: 0
   m_Name: Fire
   m_TagString: Untagged
@@ -4844,23 +4844,6 @@ ParticleSystemRenderer:
   m_MeshWeighting2: 1
   m_MeshWeighting3: 1
   m_MaskInteraction: 0
---- !u!114 &434495446948145772
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3094608056477499046}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2a1ba25ce5fba98aaba907877e070492, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  currentIntensity: 1
-  regenDelay: 2.5
-  regenRate: 0.1
-  fireParticleSystems:
-  - {fileID: 3794607431366458727}
 --- !u!65 &7362400635610990909
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -4882,3 +4865,22 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 2.3979042, y: 2.0730124, z: 2.2896457}
   m_Center: {x: -0.047898173, y: 0.99233866, z: -0.14476061}
+--- !u!114 &-6756787150905005850
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3094608056477499046}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2a1ba25ce5fba98aaba907877e070492, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ignitionRate: 20
+  burningRate: 30
+  currentIntensity: 1
+  regenDelay: 2.5
+  regenRate: 0.1
+  fireParticleSystems:
+  - {fileID: 3794607431366458727}
