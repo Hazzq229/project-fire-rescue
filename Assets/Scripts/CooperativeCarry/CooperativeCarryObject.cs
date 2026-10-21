@@ -291,7 +291,6 @@ namespace TA.AdaptiveAnimation
         {
             if (state != CooperativeCarryState.Carrying || !frontHolder || !backHolder) return;
 
-            // 1. Baca input rotasi dari kedua pemain
             var frontLocalInput = frontHolder.GetComponent<LocalPlayerInput>();
             var backLocalInput = backHolder.GetComponent<LocalPlayerInput>();
 
@@ -299,10 +298,8 @@ namespace TA.AdaptiveAnimation
             if (frontLocalInput) totalTurnInput += frontLocalInput.HoseAim.x;
             if (backLocalInput) totalTurnInput += backLocalInput.HoseAim.x;
 
-            // Batasi rentang input antara -1 sampai 1 agar rotasi tidak terlalu cepat saat kedua pemain memutar ke arah sama
             totalTurnInput = Mathf.Clamp(totalTurnInput, -1f, 1f);
 
-            // 2. Terapkan rotasi jika ada input gabungan yang aktif
             if (Mathf.Abs(totalTurnInput) > 0.01f)
             {
                 currentYaw = Mathf.Repeat(currentYaw + totalTurnInput * turnSpeed * Time.fixedDeltaTime, 360f);
@@ -315,10 +312,8 @@ namespace TA.AdaptiveAnimation
             var fr = frontHolder.GetComponent<Rigidbody>();
             var br = backHolder.GetComponent<Rigidbody>();
 
-            // Terapkan rotasi ke Rigidbody objek
             Rigidbody.MoveRotation(levelRotation);
 
-            // Hitung pergerakan translasi
             Vector2 input = CombineInput(frontInput, backInput);
             float speed = Mathf.Min(front.BaseMoveSpeed, back.BaseMoveSpeed) * (1f - SpeedPenalty);
             Vector3 delta = new Vector3(input.x, 0f, input.y) * speed * Time.fixedDeltaTime;
@@ -328,13 +323,11 @@ namespace TA.AdaptiveAnimation
 
             groupVelocity = delta / Time.fixedDeltaTime;
 
-            // Pindahkan objek dan perbarui posisi stance pemain
             Rigidbody.MovePosition(Rigidbody.position + delta);
 
             fr.MovePosition(GetStance(CarryRole.Front, fr.position.y) + delta);
             br.MovePosition(GetStance(CarryRole.Back, br.position.y) + delta);
 
-            // Selaraskan arah hadap kedua pemain
             Quaternion frontTargetRot = levelRotation * Quaternion.Euler(0f, 180f, 0f);
             Quaternion backTargetRot = levelRotation;
 
