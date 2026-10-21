@@ -1,9 +1,14 @@
 fileFormatVersion: 2
-guid: 6d7c6f926a9b4e04b80f18350675ae96
+guid: c0ee5f8104332b74a9e7c554b7b50796
 ModelImporter:
   serializedVersion: 22200
   internalIDToNameTable: []
-  externalObjects: {}
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Tex_Env
+    second: {fileID: 2100000, guid: 4ee372e6cbccc4944aae4abdb9943b17, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0
