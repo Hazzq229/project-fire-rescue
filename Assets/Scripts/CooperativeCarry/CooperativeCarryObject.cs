@@ -36,6 +36,11 @@ namespace TA.AdaptiveAnimation
         [SerializeField] private InteractionController frontHolder;
         [SerializeField] private InteractionController backHolder;
         [SerializeField] private Vector3 groupVelocity;
+
+        [Header("Cooperative Rotation Settings")]
+        [SerializeField, Min(10f)] private float turnSpeed = 90f;
+        private float currentYaw;
+
         private BoxCollider shape;
         private bool savedKinematic, savedGravity, releasing;
         private RigidbodyInterpolation savedInterpolation;
@@ -137,7 +142,10 @@ namespace TA.AdaptiveAnimation
             savedInterpolation = Rigidbody.interpolation;
             savedCollisionMode = Rigidbody.collisionDetectionMode;
             savedConstraints = Rigidbody.constraints;
-            levelRotation = Quaternion.Euler(0f, Rigidbody.rotation.eulerAngles.y, 0f);
+
+            currentYaw = Rigidbody.rotation.eulerAngles.y;
+            levelRotation = Quaternion.Euler(0f, currentYaw, 0f);
+
             firstRole = frontHolder ? CarryRole.Front : CarryRole.Back;
             if (!Rigidbody.isKinematic) { Rigidbody.velocity = Vector3.zero; Rigidbody.angularVelocity = Vector3.zero; }
             Rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
@@ -282,21 +290,56 @@ namespace TA.AdaptiveAnimation
         private void MoveTogether(Vector2 frontInput, Vector2 backInput)
         {
             if (state != CooperativeCarryState.Carrying || !frontHolder || !backHolder) return;
+
+            // 1. Baca input rotasi dari kedua pemain
+            var frontLocalInput = frontHolder.GetComponent<LocalPlayerInput>();
+            var backLocalInput = backHolder.GetComponent<LocalPlayerInput>();
+
+            float totalTurnInput = 0f;
+            if (frontLocalInput) totalTurnInput += frontLocalInput.HoseAim.x;
+            if (backLocalInput) totalTurnInput += backLocalInput.HoseAim.x;
+
+            // Batasi rentang input antara -1 sampai 1 agar rotasi tidak terlalu cepat saat kedua pemain memutar ke arah sama
+            totalTurnInput = Mathf.Clamp(totalTurnInput, -1f, 1f);
+
+            // 2. Terapkan rotasi jika ada input gabungan yang aktif
+            if (Mathf.Abs(totalTurnInput) > 0.01f)
+            {
+                currentYaw = Mathf.Repeat(currentYaw + totalTurnInput * turnSpeed * Time.fixedDeltaTime, 360f);
+                levelRotation = Quaternion.Euler(0f, currentYaw, 0f);
+            }
+
             UpdateEffort(frontInput, backInput);
             var front = frontHolder.GetComponent<ThirdPersonPlayerController>();
             var back = backHolder.GetComponent<ThirdPersonPlayerController>();
             var fr = frontHolder.GetComponent<Rigidbody>();
             var br = backHolder.GetComponent<Rigidbody>();
+
+            // Terapkan rotasi ke Rigidbody objek
+            Rigidbody.MoveRotation(levelRotation);
+
+            // Hitung pergerakan translasi
             Vector2 input = CombineInput(frontInput, backInput);
             float speed = Mathf.Min(front.BaseMoveSpeed, back.BaseMoveSpeed) * (1f - SpeedPenalty);
             Vector3 delta = new Vector3(input.x, 0f, input.y) * speed * Time.fixedDeltaTime;
             delta = SafeDelta(Rigidbody, delta);
             delta = SafeDelta(fr, delta);
             delta = SafeDelta(br, delta);
+
             groupVelocity = delta / Time.fixedDeltaTime;
+
+            // Pindahkan objek dan perbarui posisi stance pemain
             Rigidbody.MovePosition(Rigidbody.position + delta);
+
             fr.MovePosition(GetStance(CarryRole.Front, fr.position.y) + delta);
             br.MovePosition(GetStance(CarryRole.Back, br.position.y) + delta);
+
+            // Selaraskan arah hadap kedua pemain
+            Quaternion frontTargetRot = levelRotation * Quaternion.Euler(0f, 180f, 0f);
+            Quaternion backTargetRot = levelRotation;
+
+            fr.MoveRotation(Quaternion.RotateTowards(fr.rotation, frontTargetRot, 180f * Time.fixedDeltaTime));
+            br.MoveRotation(Quaternion.RotateTowards(br.rotation, backTargetRot, 180f * Time.fixedDeltaTime));
         }
 
         private void UpdateEffort(Vector2 frontInput, Vector2 backInput)
