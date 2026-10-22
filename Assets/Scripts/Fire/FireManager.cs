@@ -13,6 +13,10 @@ public class FireManager : MonoBehaviour
     public float burningPoint = 100f;
     public Vector3 GridOrigin => transform.position;
 
+    [Header("Zone Detection")]
+    [Tooltip("Layer khusus untuk GameObject FloorZoneModifier")]
+    [SerializeField] private LayerMask zoneLayerMask;
+
     [Header("Fire Parameters")]
     public float damagePoint = 5f;
     public float burningRate = 2f;
@@ -50,9 +54,47 @@ public class FireManager : MonoBehaviour
         {
             for (int y = 0; y < gridSizeY; y++)
             {
-                floorGrid[x, y] = new CellData(new Vector2Int(x, y), CellType.Combustible, IgnitionPoint, burningPoint);
+                Vector2Int pos = new Vector2Int(x, y);
+                Vector3 cellWorldCenter = GetCellWorldPosition(pos);
+
+                CellType type = CellType.Combustible;
+                float ignition = IgnitionPoint;
+                float burning = burningPoint;
+
+                // Deteksi apakah ada FloorZoneModifier di koordinat sel ini
+                Collider[] zoneColliders = Physics.OverlapBox(
+                    cellWorldCenter,
+                    new Vector3(cellSize * 0.45f, 0.5f, cellSize * 0.45f),
+                    Quaternion.identity,
+                    zoneLayerMask
+                );
+
+                foreach (Collider col in zoneColliders)
+                {
+                    if (col.TryGetComponent(out FloorZoneModifier modifier))
+                    {
+                        type = modifier.cellType;
+                        if (modifier.overridePoints)
+                        {
+                            ignition = modifier.ignitionPoint;
+                            burning = modifier.burningPoint;
+                        }
+                        break;
+                    }
+                }
+
+                floorGrid[x, y] = new CellData(pos, type, ignition, burning);
             }
         }
+    }
+
+    public Vector3 GetCellWorldPosition(Vector2Int gridPos)
+    {
+        return new Vector3(
+            GridOrigin.x + (gridPos.x * cellSize) + (cellSize / 2f),
+            GridOrigin.y + 0.05f,
+            GridOrigin.z + (gridPos.y * cellSize) + (cellSize / 2f)
+        );
     }
 
     private void Update()
@@ -75,7 +117,6 @@ public class FireManager : MonoBehaviour
         {
             CellData cell = floorGrid[pos.x, pos.y];
 
-            // Proses Regenerasi Api
             if (cell.ExtinguishPoint < cell.MaxExtinguishPoint && Time.time > cell.LastWaterTime + regenDelay)
             {
                 cell.ExtinguishPoint += regenRate * tickRate;
@@ -110,7 +151,6 @@ public class FireManager : MonoBehaviour
             for (int y = -1; y <= 1; y++)
             {
                 if (x == 0 && y == 0) continue;
-
                 if (activeFireCells.Count + newlyIgnited.Count >= spreadLimit) return;
 
                 Vector2Int neighborPos = new Vector2Int(pos.x + x, pos.y + y);
@@ -126,6 +166,8 @@ public class FireManager : MonoBehaviour
                     }
 
                     CellData targetCell = floorGrid[neighborPos.x, neighborPos.y];
+
+                    // Hanya merambat ke sel yang berkategori Combustible
                     if (targetCell.Type == CellType.Combustible && targetCell.State == CellState.Normal && !newlyIgnited.Contains(targetCell.Position))
                     {
                         targetCell.IgnitionPoint -= damage;
@@ -136,19 +178,14 @@ public class FireManager : MonoBehaviour
         }
     }
 
-    public Vector3 GetCellWorldPosition(Vector2Int gridPos)
-    {
-        return new Vector3(
-            GridOrigin.x + (gridPos.x * cellSize) + (cellSize / 2f),
-            GridOrigin.y + 0.5f, // Ketinggian ditarik sedikit ke atas agar sejajar dengan collider tembok
-            GridOrigin.z + (gridPos.y * cellSize) + (cellSize / 2f)
-        );
-    }
-
     public void TriggerOnCellIgnited(Vector2Int pos)
     {
         if (activeFireCells.Count >= spreadLimit) return;
         CellData cell = floorGrid[pos.x, pos.y];
+
+        // Mencegah sel NonCombustible dinyalakan
+        if (cell.Type == CellType.NonCombustible) return;
+
         cell.State = CellState.Ignited;
         cell.ExtinguishPoint = cell.MaxExtinguishPoint;
         activeFireCells.Add(pos);
@@ -159,6 +196,7 @@ public class FireManager : MonoBehaviour
     {
         TriggerOnCellIgnited(pos);
     }
+
     public void ApplyExtinguish(Vector2Int pos, float amount)
     {
         if (!IsValidPosition(pos)) return;
@@ -209,7 +247,7 @@ public class FireManager : MonoBehaviour
         {
             if (!activeFireObjects.ContainsKey(cell.Position))
             {
-                Vector3 spawnPos = new Vector3(GridOrigin.x + (cell.Position.x * cellSize) + (cellSize / 2), GridOrigin.y, GridOrigin.z + (cell.Position.y * cellSize) + (cellSize / 2));
+                Vector3 spawnPos = GetCellWorldPosition(cell.Position);
                 GameObject fire = Instantiate(firePrefab, spawnPos, Quaternion.identity);
                 activeFireObjects[cell.Position] = fire;
 
@@ -257,24 +295,28 @@ public class FireManager : MonoBehaviour
         {
             for (int y = 0; y < gridSizeY; y++)
             {
-                // Warna default saat Edit Mode
+                Vector3 center = GetCellWorldPosition(new Vector2Int(x, y));
+
+                // Warna default
                 Gizmos.color = Color.green;
 
-                // Jika sedang Play Mode, sesuaikan warna dengan kondisi sel
                 if (Application.isPlaying && floorGrid != null)
                 {
                     CellData cell = floorGrid[x, y];
-                    Gizmos.color = (cell.State == CellState.Ignited || cell.State == CellState.Burning)
-                        ? Color.red
-                        : Color.green;
-                }
 
-                // Offset Y sebesar 0.05f agar garis tidak tertimbun mesh lantai
-                Vector3 center = new Vector3(
-                    GridOrigin.x + (x * cellSize) + (cellSize / 2f),
-                    GridOrigin.y + 0.05f,
-                    GridOrigin.z + (y * cellSize) + (cellSize / 2f)
-                );
+                    if (cell.Type == CellType.NonCombustible)
+                    {
+                        Gizmos.color = Color.gray; // Sel tahan api
+                    }
+                    else if (cell.State == CellState.Ignited || cell.State == CellState.Burning)
+                    {
+                        Gizmos.color = Color.red; // Sel terbakar
+                    }
+                    else
+                    {
+                        Gizmos.color = Color.green;
+                    }
+                }
 
                 Gizmos.DrawWireCube(center, new Vector3(cellSize, 0f, cellSize));
             }
