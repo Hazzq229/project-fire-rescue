@@ -2,15 +2,8 @@ using UnityEngine;
 
 public class CombustObject : MonoBehaviour
 {
-    [Header("Cell Data Composition")]
-    [SerializeField] private CellData cellData = new CellData(Vector2Int.zero, CellType.Combustible, 10f, 60f, 50f);
-
-    [Header("Regeneration Parameters")]
-    [SerializeField] private float regenDelay = 2.5f;
-    [SerializeField] private float regenRate = 10f;
-
-    [Header("References")]
-    [SerializeField] private GameObject firePrefab;
+    [SerializeField] private CombustibleConfig config;
+    private CellData cellData;
 
     private MeshRenderer meshRenderer;
     private GameObject activeFire;
@@ -22,7 +15,16 @@ public class CombustObject : MonoBehaviour
     void Start()
     {
         meshRenderer = GetComponent<MeshRenderer>();
-        cellData.ExtinguishPoint = cellData.MaxExtinguishPoint;
+        if (config != null)
+        {
+            cellData = new CellData(
+                Vector2Int.zero,
+                config.type,
+                config.ignitionPoint,
+                config.burningPoint,
+                config.maxExtinguishPoint
+            );
+        }
     }
 
     void Update()
@@ -48,9 +50,9 @@ public class CombustObject : MonoBehaviour
             FireManager.Instance.ApplyHeatToArea(gridPos, FireManager.Instance.damagePoint * Time.deltaTime);
 
             // Proses Regenerasi Api
-            if (cellData.ExtinguishPoint < cellData.MaxExtinguishPoint && Time.time > cellData.LastWaterTime + regenDelay)
+            if (cellData.ExtinguishPoint < cellData.MaxExtinguishPoint && Time.time > cellData.LastWaterTime + config.regenDelay)
             {
-                cellData.ExtinguishPoint += regenRate * Time.deltaTime;
+                cellData.ExtinguishPoint += config.regenRate * Time.deltaTime;
                 if (cellData.ExtinguishPoint > cellData.MaxExtinguishPoint)
                     cellData.ExtinguishPoint = cellData.MaxExtinguishPoint;
 
@@ -98,9 +100,9 @@ public class CombustObject : MonoBehaviour
         cellData.State = CellState.Ignited;
         cellData.ExtinguishPoint = cellData.MaxExtinguishPoint;
 
-        if (firePrefab != null && activeFire == null)
+        if (config.firePrefab != null && activeFire == null)
         {
-            activeFire = Instantiate(firePrefab, transform.position, Quaternion.identity, transform);
+            activeFire = Instantiate(config.firePrefab, transform.position, Quaternion.identity, transform);
             fireParticles = activeFire.GetComponentsInChildren<ParticleSystem>();
             startIntensities = new float[fireParticles.Length];
 

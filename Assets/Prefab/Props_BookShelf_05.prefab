@@ -150,12 +150,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 10
-  burningPoint: 60
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 2781d814ba85ca975a45d29e0c19442e, type: 2}
 --- !u!4 &674782288554332445 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 01ae8500f67d36c469708e541a3d29d8,
@@ -272,12 +267,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 10
-  burningPoint: 60
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 2781d814ba85ca975a45d29e0c19442e, type: 2}
 --- !u!4 &4441356123005019467 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 241c132879d839044b3e128ef936d522,
@@ -425,12 +415,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 74
-  burningPoint: 80.9
-  firePrefab: {fileID: 8179677174226484149, guid: b35d065ce049f794fb4fee96a2a5863d,
-    type: 3}
+  config: {fileID: 11400000, guid: 7dc6df9a463f8418e887cb91f3573466, type: 2}
 --- !u!1001 &4808369842698128010
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -547,12 +532,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 7.8
-  burningPoint: 60
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 2781d814ba85ca975a45d29e0c19442e, type: 2}
 --- !u!1001 &6082739757231461783
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -669,12 +649,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 10
-  burningPoint: 60
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 2781d814ba85ca975a45d29e0c19442e, type: 2}
 --- !u!1001 &7208647597997843827
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -791,12 +766,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 10
-  burningPoint: 60
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 2781d814ba85ca975a45d29e0c19442e, type: 2}
 --- !u!1001 &7266002792135792946
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -913,12 +883,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 10
-  burningPoint: 60
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 2781d814ba85ca975a45d29e0c19442e, type: 2}
 --- !u!1001 &7585311076590803652
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1029,12 +994,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 10
-  burningPoint: 60
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 2781d814ba85ca975a45d29e0c19442e, type: 2}
 --- !u!4 &7984540471353064751 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 241c132879d839044b3e128ef936d522,
@@ -1157,9 +1117,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 10
-  burningPoint: 36.6
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 2781d814ba85ca975a45d29e0c19442e, type: 2}

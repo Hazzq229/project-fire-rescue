@@ -188,9 +188,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 25.5
-  burningPoint: 60
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
-    type: 3}
+  config: {fileID: 11400000, guid: 7dc6df9a463f8418e887cb91f3573466, type: 2}
