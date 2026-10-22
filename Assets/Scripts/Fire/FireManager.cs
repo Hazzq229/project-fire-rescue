@@ -169,7 +169,7 @@ public class FireManager : MonoBehaviour
         return new Vector2Int(x, y);
     }
 
-    private bool IsValidPosition(Vector2Int pos)
+    public bool IsValidPosition(Vector2Int pos)
     {
         return pos.x >= 0 && pos.x < gridSizeX && pos.y >= 0 && pos.y < gridSizeY;
     }
