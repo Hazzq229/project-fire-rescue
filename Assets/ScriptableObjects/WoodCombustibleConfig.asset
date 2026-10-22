@@ -18,5 +18,5 @@ MonoBehaviour:
   maxExtinguishPoint: 60
   regenDelay: 2.5
   regenRate: 10
-  firePrefab: {fileID: 4258803748790404457, guid: cdf77be4ae05b7bb2b7d75c6e35ff375,
+  firePrefab: {fileID: 8179677174226484149, guid: b35d065ce049f794fb4fee96a2a5863d,
     type: 3}

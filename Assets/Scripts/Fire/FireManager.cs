@@ -24,6 +24,9 @@ public class FireManager : MonoBehaviour
     public float regenDelay = 2.5f;
     public float regenRate = 10f;
 
+    [Header("Wall Occlusion")]
+    [SerializeField] private LayerMask wallLayerMask;
+
     private CellData[,] floorGrid;
     private HashSet<Vector2Int> activeFireCells = new HashSet<Vector2Int>();
     private float nextTickTime;
@@ -100,16 +103,28 @@ public class FireManager : MonoBehaviour
 
     private void ApplyMooreNeighborhoodDamage(Vector2Int pos, List<Vector2Int> newlyIgnited, float damage)
     {
+        Vector3 originPos = GetCellWorldPosition(pos);
+
         for (int x = -1; x <= 1; x++)
         {
             for (int y = -1; y <= 1; y++)
             {
                 if (x == 0 && y == 0) continue;
+
                 if (activeFireCells.Count + newlyIgnited.Count >= spreadLimit) return;
+
                 Vector2Int neighborPos = new Vector2Int(pos.x + x, pos.y + y);
 
                 if (IsValidPosition(neighborPos))
                 {
+                    Vector3 targetPos = GetCellWorldPosition(neighborPos);
+
+                    // Cek apakah ada tembok yang menghalangi lintasan api ke sel tetangga
+                    if (Physics.Linecast(originPos, targetPos, wallLayerMask))
+                    {
+                        continue; // Api terhalang tembok, lewati sel ini
+                    }
+
                     CellData targetCell = floorGrid[neighborPos.x, neighborPos.y];
                     if (targetCell.Type == CellType.Combustible && targetCell.State == CellState.Normal && !newlyIgnited.Contains(targetCell.Position))
                     {
@@ -119,6 +134,15 @@ public class FireManager : MonoBehaviour
                 }
             }
         }
+    }
+
+    public Vector3 GetCellWorldPosition(Vector2Int gridPos)
+    {
+        return new Vector3(
+            GridOrigin.x + (gridPos.x * cellSize) + (cellSize / 2f),
+            GridOrigin.y + 0.5f, // Ketinggian ditarik sedikit ke atas agar sejajar dengan collider tembok
+            GridOrigin.z + (gridPos.y * cellSize) + (cellSize / 2f)
+        );
     }
 
     public void TriggerOnCellIgnited(Vector2Int pos)
