@@ -1,31 +1,149 @@
 using UnityEngine;
 
+/// <summary>
+/// Mengelola transisi split screen adaptif berdasarkan jarak antara player 1 dan player 2.
+/// Ketika kedua player berdekatan, kamera bersama aktif.
+/// Ketika kedua player berjauhan melebihi jarakBatasSplit, kamera terpisah (split screen) aktif.
+/// Dilengkapi ambang histeresis untuk mencegah flickering di perbatasan jarak.
+/// </summary>
 public class SplitScreenManager : MonoBehaviour
 {
+    [Header("Player Targets")]
     public Transform player1;
     public Transform player2;
-    public float jarakBatasSplit = 15f; // Jarak maksimal sebelum layar terbelah
 
-    [Header("Referensi Objek")]
-    public GameObject kameraBersama; // Masukkan Virtual Camera Target Group ke sini
-    public GameObject canvasSplitScreen; // Masukkan Canvas UI ke sini
+    [Header("Distance Settings")]
+    [Tooltip("Jarak minimal kedua player sebelum kamera membelah (split).")]
+    public float jarakBatasSplit = 15f;
 
-    void Update()
+    [Tooltip("Margin histeresis agar kamera tidak berkedip saat player bergerak di sekitar batas jarak.")]
+    [Range(0.5f, 5f)]
+    public float histeresis = 1.5f;
+
+    [Header("Shared Camera & UI")]
+    public GameObject kameraBersama;       // Virtual Camera Target Group (Shared)
+    public GameObject canvasSplitScreen;   // Canvas UI yang menampung RawImage split
+
+    [Header("Split Cameras & VCams (Opsional)")]
+    public GameObject player1Camera;
+    public GameObject player2Camera;
+    public GameObject player1VirtualCamera;
+    public GameObject player2VirtualCamera;
+
+    public bool IsSplitActive { get; private set; }
+
+    private void Awake()
     {
-        // Menghitung jarak antar karakter
+        ResolvePlayerReferences();
+    }
+
+    private void OnEnable()
+    {
+        EvaluateDistance(true);
+    }
+
+    private void OnDisable()
+    {
+        // Saat komponen dinonaktifkan (misalnya saat mode Shared Zoom Camera),
+        // pastikan tampilan kembali ke kamera bersama dan split dimatikan.
+        ApplyState(false);
+    }
+
+    private void Update()
+    {
+        EvaluateDistance(false);
+    }
+
+    public void ForceEvaluate()
+    {
+        EvaluateDistance(true);
+    }
+
+    private void EvaluateDistance(bool force)
+    {
+        if (player1 == null || player2 == null)
+        {
+            ResolvePlayerReferences();
+            if (player1 == null || player2 == null) return;
+        }
+
         float jarak = Vector3.Distance(player1.position, player2.position);
 
-        if (jarak >= jarakBatasSplit)
+        if (!IsSplitActive)
         {
-            // Jika berjauhan: Nyalakan UI Split Screen, matikan kamera bersama
-            canvasSplitScreen.SetActive(true);
-            kameraBersama.SetActive(false);
+            // Belum split: membelah jika melebihi batas split
+            if (jarak >= jarakBatasSplit || (force && jarak >= jarakBatasSplit))
+            {
+                ApplyState(true);
+            }
         }
         else
         {
-            // Jika berdekatan: Matikan UI, kembali ke kamera bersama
-            canvasSplitScreen.SetActive(false);
-            kameraBersama.SetActive(true);
+            // Sedang split: menyatu kembali jika jarak kurang dari (batas split - histeresis)
+            float mergeThreshold = Mathf.Max(1f, jarakBatasSplit - histeresis);
+            if (jarak < mergeThreshold)
+            {
+                ApplyState(false);
+            }
+        }
+    }
+
+    public void ApplyState(bool split)
+    {
+        IsSplitActive = split;
+
+        if (canvasSplitScreen != null && canvasSplitScreen.activeSelf != split)
+        {
+            canvasSplitScreen.SetActive(split);
+        }
+
+        if (kameraBersama != null && kameraBersama.activeSelf == split)
+        {
+            kameraBersama.SetActive(!split);
+        }
+
+        if (player1Camera != null && player1Camera.activeSelf != split)
+        {
+            player1Camera.SetActive(split);
+        }
+
+        if (player2Camera != null && player2Camera.activeSelf != split)
+        {
+            player2Camera.SetActive(split);
+        }
+
+        if (player1VirtualCamera != null && player1VirtualCamera.activeSelf != split)
+        {
+            player1VirtualCamera.SetActive(split);
+        }
+
+        if (player2VirtualCamera != null && player2VirtualCamera.activeSelf != split)
+        {
+            player2VirtualCamera.SetActive(split);
+        }
+    }
+
+    private void ResolvePlayerReferences()
+    {
+        if (player1 == null)
+        {
+            var p1Obj = GameObject.Find("Player1");
+            if (p1Obj != null) player1 = p1Obj.transform;
+        }
+
+        if (player2 == null)
+        {
+            var p2Obj = GameObject.Find("Player2");
+            if (p2Obj != null) player2 = p2Obj.transform;
+        }
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        if (player1 != null && player2 != null)
+        {
+            Gizmos.color = IsSplitActive ? Color.red : Color.green;
+            Gizmos.DrawLine(player1.position, player2.position);
         }
     }
 }
