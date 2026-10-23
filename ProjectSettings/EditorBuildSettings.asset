@@ -8,6 +8,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/test_hose_simulation.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/Scenes/MainMenu.unity
+    guid: 49698be4e5deb574fb5e6ad7c0a94d44
+  - enabled: 1
+    path: Assets/Scenes/FR_Level_01_AnimationDemo.unity
+    guid: 6c03300fe62f94d0cb1170a4b00e1eeb
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: d37b12321f2edd3468d6895b198bda2d,
       type: 3}
