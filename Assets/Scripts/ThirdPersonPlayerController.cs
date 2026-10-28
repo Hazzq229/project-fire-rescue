@@ -75,7 +75,7 @@ public class ThirdPersonPlayerController : MonoBehaviour
     {
         _inputVector = _localInput ? Vector2.ClampMagnitude(_localInput.MoveInput, 1f) : Vector2.zero;
         _runRequested = _localInput && _localInput.RunHeld;
-        Vector3 actual = CooperativeCarry ? CooperativeCarry.GroupVelocity :
+        Vector3 actual = CooperativeCarry ? CooperativeCarry.GetPlayerVelocity(_interaction) :
             CooperativeHose ? CooperativeHose.GetPlayerVelocity(_interaction) : GetVelocity();
         actual.y = 0f;
         UpdateLocomotionAnimation(_movementLocked || IsKnockedBack ? 0f : actual.magnitude, Time.deltaTime);
