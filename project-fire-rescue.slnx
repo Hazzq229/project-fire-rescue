@@ -45,6 +45,5 @@
   <Project Path="Unity.SysrootPackage.Editor.csproj" />
   <Project Path="Unity.VisualScripting.Shared.Editor.csproj" />
   <Project Path="Unity.Recorder.Base.csproj" />
-  <Project Path="AdaptiveCarry.Tests.csproj" />
   <Project Path="Unity.Animation.Rigging.DocCodeExamples.csproj" />
 </Solution>
