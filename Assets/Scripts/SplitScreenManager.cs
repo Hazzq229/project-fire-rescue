@@ -1,4 +1,5 @@
 using UnityEngine;
+using Cinemachine;
 
 /// <summary>
 /// Mengelola transisi split screen adaptif berdasarkan jarak antara player 1 dan player 2.
@@ -23,6 +24,15 @@ public class SplitScreenManager : MonoBehaviour
     [Header("Shared Camera & UI")]
     public GameObject kameraBersama;       // Virtual Camera Target Group (Shared)
     public GameObject canvasSplitScreen;   // Canvas UI yang menampung RawImage split
+
+    [Header("Cinemachine Target Group")]
+    [SerializeField] private CinemachineTargetGroup targetGroup;
+
+    [SerializeField, Min(0f)]
+    private float playerTargetWeight = 1f;
+
+    [SerializeField, Min(0f)]
+    private float playerTargetRadius = 1f;
 
     [Header("Split Cameras & VCams (Opsional)")]
     public GameObject player1Camera;
@@ -52,6 +62,62 @@ public class SplitScreenManager : MonoBehaviour
     private void Update()
     {
         EvaluateDistance(false);
+    }
+
+    /// <summary>
+    /// Dipanggil oleh GameplayPlayerSpawner setelah player runtime selesai dibuat.
+    /// Jangan mengandalkan GameObject.Find("Player1/Player2") karena prefab hasil spawn
+    /// biasanya bernama Player(Clone).
+    /// </summary>
+    public void SetPlayerTargets(Transform p1, Transform p2)
+    {
+        // Hapus target pemain sebelumnya jika masih terdaftar.
+        RemoveTargetIfPresent(player1);
+        RemoveTargetIfPresent(player2);
+
+        // Perbarui referensi pemain runtime.
+        player1 = p1;
+        player2 = p2;
+
+        // Masukkan instance pemain yang baru ke Target Group.
+        AddTargetIfMissing(player1);
+        AddTargetIfMissing(player2);
+
+        if (targetGroup != null)
+            targetGroup.DoUpdate();
+
+        // Evaluasi ulang apakah shared camera atau split-screen aktif.
+        ForceEvaluate();
+
+        Debug.Log(
+            $"[SplitScreenManager] Target Group updated. " +
+            $"P1={player1?.name}, P2={player2?.name}",
+            this
+        );
+    }
+
+    private void RemoveTargetIfPresent(Transform target)
+    {
+        if (targetGroup == null || target == null)
+            return;
+
+        if (targetGroup.FindMember(target) >= 0)
+            targetGroup.RemoveMember(target);
+    }
+
+    private void AddTargetIfMissing(Transform target)
+    {
+        if (targetGroup == null || target == null)
+            return;
+
+        if (targetGroup.FindMember(target) < 0)
+        {
+            targetGroup.AddMember(
+                target,
+                playerTargetWeight,
+                playerTargetRadius
+            );
+        }
     }
 
     public void ForceEvaluate()
