@@ -1520,6 +1520,7 @@ GameObject:
   - component: {fileID: 19752270}
   - component: {fileID: 19752269}
   - component: {fileID: 19752274}
+  - component: {fileID: 19752275}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -1701,6 +1702,25 @@ MonoBehaviour:
   player2Camera: {fileID: 1162940931}
   player1VirtualCamera: {fileID: 1504452255}
   player2VirtualCamera: {fileID: 2073589084}
+--- !u!114 &19752275
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 19752268}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b78990ae44735648942ab78b26f83d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _profile: {fileID: 11400000, guid: d1cf5d1898cbe2e43b70bd1779b1e6ec, type: 2}
+  _cameraOverride: {fileID: 0}
+  _focusTargets:
+  - {fileID: 1778991054}
+  - {fileID: 246475150}
+  _manualWalls: []
+  _autoDetectByTag: 1
 --- !u!1001 &21058586
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -11305,6 +11325,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: Mod_WallWindow_02 (7)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8315972196362190044, guid: ecbf3ff64ccf1a7419358fd484d5218e,
+        type: 3}
+      propertyPath: m_TagString
+      value: Fading Wall
       objectReference: {fileID: 0}
     - target: {fileID: 8547305670991598586, guid: ecbf3ff64ccf1a7419358fd484d5218e,
         type: 3}
@@ -31025,6 +31050,11 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2264830773119464675, guid: ecbf3ff64ccf1a7419358fd484d5218e,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 3920341911843025881, guid: ecbf3ff64ccf1a7419358fd484d5218e,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -31064,6 +31094,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4963901801594167966, guid: ecbf3ff64ccf1a7419358fd484d5218e,
+        type: 3}
+      propertyPath: m_Enabled
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6100265057632836081, guid: ecbf3ff64ccf1a7419358fd484d5218e,
         type: 3}
@@ -31119,6 +31154,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: Mod_WallWindow_02 (8)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8315972196362190044, guid: ecbf3ff64ccf1a7419358fd484d5218e,
+        type: 3}
+      propertyPath: m_TagString
+      value: Fading Wall
       objectReference: {fileID: 0}
     - target: {fileID: 8547305670991598586, guid: ecbf3ff64ccf1a7419358fd484d5218e,
         type: 3}
@@ -64882,6 +64922,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: Mod_WallWindow_02 (9)
       objectReference: {fileID: 0}
+    - target: {fileID: 8315972196362190044, guid: ecbf3ff64ccf1a7419358fd484d5218e,
+        type: 3}
+      propertyPath: m_TagString
+      value: Fading Wall
+      objectReference: {fileID: 0}
     - target: {fileID: 8547305670991598586, guid: ecbf3ff64ccf1a7419358fd484d5218e,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -70929,6 +70974,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: Fab_Building_05 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 6338192302537448203, guid: 93a022e0bfc5c7a44942ce80fceb101f,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -75596,7 +75646,7 @@ VisualEffect:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1510632170}
   m_Enabled: 1
-  m_Asset: {fileID: 8926484042661614526, guid: 7e7f4e5a090cc4448b3a9b83a2b09c25, type: 3}
+  m_Asset: {fileID: 0}
   m_InitialEventName: OnStop
   m_InitialEventNameOverriden: 1
   m_StartSeed: 0
@@ -77652,7 +77702,7 @@ VisualEffect:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1564294009}
   m_Enabled: 1
-  m_Asset: {fileID: 8926484042661614526, guid: 7e7f4e5a090cc4448b3a9b83a2b09c25, type: 3}
+  m_Asset: {fileID: 0}
   m_InitialEventName: OnStop
   m_InitialEventNameOverriden: 1
   m_StartSeed: 0
@@ -85606,6 +85656,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: Mod_WallWindow_02 (10)
       objectReference: {fileID: 0}
+    - target: {fileID: 8315972196362190044, guid: ecbf3ff64ccf1a7419358fd484d5218e,
+        type: 3}
+      propertyPath: m_TagString
+      value: Fading Wall
+      objectReference: {fileID: 0}
     - target: {fileID: 8547305670991598586, guid: ecbf3ff64ccf1a7419358fd484d5218e,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -87880,7 +87935,7 @@ MonoBehaviour:
   interactionDistance: 0.5
   idleStatePath: Base Layer.Idle 0
   maxActionSeconds: 8
-  alignmentDuration: 0.2
+  alignmentDuration: 0.05
   openFrontAnimation: DoorPush
   openBackAnimation: DoorPull
   closeFrontAnimation: DoorPull
@@ -87975,7 +88030,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _animator: {fileID: 1778991049}
-  _moveSpeed: 3
+  _moveSpeed: 2.5
   _rotationSpeed: 18
   _runMultiplier: 1.65
   _acceleration: 14
@@ -89623,8 +89678,8 @@ MonoBehaviour:
   openFrontPoint: {fileID: 1344093705}
   openBackPoint: {fileID: 258871946}
   openAngle: 90
-  openDuration: 0.5
-  closeDuration: 0.5
+  openDuration: 0.2
+  closeDuration: 0.2
 --- !u!4 &1818246034
 Transform:
   m_ObjectHideFlags: 0
@@ -108885,6 +108940,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: Fab_Building_05 (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 6338192302537448203, guid: 93a022e0bfc5c7a44942ce80fceb101f,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
