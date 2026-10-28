@@ -3753,6 +3753,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   lobbyPlayerPrefab: {fileID: 6266922482562749779, guid: f2d0024ca19b11a43ad36fde7521e16a,
     type: 3}
+  logDeviceAssignments: 1
 --- !u!4 &1571355840
 Transform:
   m_ObjectHideFlags: 0
@@ -4779,7 +4780,7 @@ MonoBehaviour:
   - Character 3
   requireTwoPlayersToStart: 1
   localCoopJoinManager: {fileID: 1571355838}
-  gameplaySceneName: ControllerDemo
+  gameplaySceneName: Gameloop_Demo
   mainMenuSceneName: MainMenu
   pausePanel: {fileID: 0}
   resumeButton: {fileID: 0}

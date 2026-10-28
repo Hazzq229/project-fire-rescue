@@ -21,6 +21,9 @@ public class GameplayPlayerSpawner : MonoBehaviour
     [Header("Runtime Camera Targets")]
     [Tooltip("Assign SplitScreenManager from the Gameplay scene. If empty, it will be searched at runtime.")]
     [SerializeField] private SplitScreenManager splitScreenManager;
+    
+    [Header("Wall Occlusion")]
+    [SerializeField] private DisasterSquad.WallOcclusion.WallOcclusionController wallOcclusionController;
 
     [Header("Diagnostics")]
     [SerializeField] private bool logDiagnostics = true;
@@ -51,7 +54,31 @@ public class GameplayPlayerSpawner : MonoBehaviour
         SpawnPlayer(1, player2SpawnPoint);
 
         AssignCameraTargets();
+        AssignWallOcclusionTargets();
         StartCoroutine(LogPositionsNextFrame());
+    }
+
+    private void AssignWallOcclusionTargets()
+    {
+        if(!wallOcclusionController)
+            wallOcclusionController = FindFirstObjectByType<DisasterSquad.WallOcclusion.WallOcclusionController>();
+
+        if(!wallOcclusionController)
+        {
+            Debug.LogWarning(
+                "[GameplayPlayerSpawner] WallOcclusionController tidak ditemukan. " +
+                "Runtime player references tidak ditetapkan ke wall occlusion controller.", this);
+            return;
+        }
+
+        Transform p1 = _spawnedPlayers[0] ? _spawnedPlayers[0].transform : null;
+        Transform p2 = _spawnedPlayers[1] ? _spawnedPlayers[1].transform : null;
+
+        if (wallOcclusionController != null)
+        {
+            wallOcclusionController.AddFocusTarget(p1.transform);
+            wallOcclusionController.AddFocusTarget(p2.transform);
+        }
     }
 
     private void AssignCameraTargets()
