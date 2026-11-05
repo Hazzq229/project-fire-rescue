@@ -48,7 +48,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
@@ -127,7 +127,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
@@ -206,7 +206,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
@@ -285,7 +285,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
@@ -364,7 +364,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
@@ -443,7 +443,7 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: f5e9c3138858fc843bf250bdca157440,
         type: 3}
