@@ -16,6 +16,7 @@ namespace TA.AdaptiveAnimation
         [HideInInspector] public GameObject appliedModel;
         [HideInInspector] public GameObject generatedVisuals;
         [HideInInspector] public GameObject[] boneAttachments;
+        [HideInInspector] public Mesh[] generatedMeshes;
         [HideInInspector] public Renderer[] originalRenderers;
         [HideInInspector] public bool[] originalEnabled;
 

@@ -10,6 +10,33 @@ This document records user feedback, architectural decisions, past corrections, 
 
 ## Log Entries
 
+### [2026-11-05] Character Model Slot — Flexible Rig Replacement
+- **Context**: A replacement character used a compatible set of bone names but differed in export orientation, non-uniform scale, and rest transform data.
+- **Lessons & Patterns**:
+  - Character appearance replacement must not reject a compatible model solely because its rest pose or DCC export transforms differ.
+  - Map bones by hierarchy when available and fall back to unique bone names; preserve the gameplay skeleton, Animator, and IK as the controlling rig.
+  - Rebuild copied mesh bind poses for the target skeleton and normalize the generated visual against the original renderer bounds before hiding the original model.
+  - Verify the result in the actual target scene and Play Mode; scene-specific tests that assume a missing object are not evidence of a model-slot regression.
+
+### [2026-11-05] Character Model Slot — Animation Mirror Serialization Fix
+- **Context**: After replacing the character model, the replacement visuals appeared correctly but animations did not play. Root causes: (1) `CharacterModelAnimatorMirror` stored `sourceAnimator` and `appearanceAnimator` in non-serialized private fields that became `null` after domain reload / play mode entry; (2) the appearance Animator was created without copying the source's avatar, so it couldn't resolve bone paths.
+- **Lessons & Patterns**:
+  - Runtime MonoBehaviour fields that must survive domain reloads (e.g. editor-configured references) **must** use `[SerializeField]`; plain private fields are zeroed on recompile and play-mode transitions.
+  - When cloning an Animator for a replacement skeleton, always copy `avatar`, `cullingMode`, and `updateMode` from the source — not just the `runtimeAnimatorController`. Without a valid avatar the Animator cannot map animation curves to bones.
+  - Non-serialized arrays (like `lastStates`) need reconstruction in `Awake()` from serialized state, since they will be `null` after deserialization.
+  - Both original (IDLE.fbx) and replacement (Rubah_P1.fbx) use Generic animation type with identical 50-bone skeletons — they share the same avatar and controller successfully.
+
+### [2026-11-05] Character Model Slot — Play Mode Offset & Oval Shape Distortion Fix
+- **Context**: When entering Play Mode, the replacement model jumped significantly to the right (+16 units offset) and appeared oval/stretched (lonjong).
+- **Lessons & Patterns**:
+  - **Root Cause of Offset (+16 in X)**: The generic animation clip (`Idle`) on `Mulyono` controller has animated position curves on the armature node (`metarig.009` with `localPosition.x = 15.975`). In the original FBX, `IDLE` container was placed at `(-7.89, -0.14, 0)` with scale `0.491` to compensate for this 16-unit shift. When `CharacterAppearance` was parented under `IDLE` and renamed `metarig.010` to `metarig.009`, the animation forced the replacement armature to jump 16 units to the right at runtime, compounding with the bounds offset calculated in Edit Mode.
+  - **Root Cause of Oval Distortion (Lonjong)**: The replacement model FBX (`Rubah_P1`) had unapplied DCC transforms on its armature (`metarig.010` export scale was non-uniform: `72.856, 54.544, 56.357`). When the animation clip evaluated, it overwrote `metarig.009` scale to uniform `(100, 100, 100)`. This un-squashed the bones by `(1.37x, 1.83x, 1.77x)`, stretching the character vertically and making it oval.
+  - **Solution**:
+    1. Parent `CharacterAppearance` directly to the player (`slot.transform`), decoupling it from the old `IDLE` container's internal offsets.
+    2. Do NOT rename the replacement model's armature (`metarig.010`), preserving its unapplied DCC rest scale and position so the mesh skinning matches the creator's intended proportions (aspect ratio perfectly preserved at 0.804).
+    3. Use direct bone rotation synchronization in [`CharacterModelAnimatorMirror`](file:///d:/Github/project-fire-rescue/Assets/Scripts/CharacterModel/CharacterModelAnimatorMirror.cs) via mapped bone pairs (`source.localRotation` -> `target.localRotation`) in `LateUpdate()`.
+    4. Normalize height against original renderers using a uniform scale (`scale = refBounds.size.y / importedBounds.size.y`) and align feet (`min.y`) and center (`x, z`).
+
 ### [2026-10-22] Cooperative Carry Backward Slack & Distance Limits
 - **Context**: Added backward slack room (`backwardRoom`) to cooperative carry (`CooperativeCarryObject`) so players can step backward away from the box without moving closer than the base stance.
 - **Lessons & Patterns**:

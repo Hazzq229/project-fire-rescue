@@ -1724,10 +1724,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   modelRoot: {fileID: 1953432286633775545}
   skeletonRoot: {fileID: 3691479962737334441}
-  replacementModel: {fileID: 0}
-  appliedModel: {fileID: 0}
+  replacementModel: {fileID: 919132149155446097, guid: 93672051a82105941bf722da5d8fec4a,
+    type: 3}
+  appliedModel: {fileID: 919132149155446097, guid: 93672051a82105941bf722da5d8fec4a,
+    type: 3}
   generatedVisuals: {fileID: 0}
   boneAttachments: []
+  generatedMeshes: []
   originalRenderers: []
   originalEnabled: 
 --- !u!114 &7337170086104439440
