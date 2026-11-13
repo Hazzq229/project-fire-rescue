@@ -23,6 +23,158 @@ public class CooperativeHoseTests
     }
     static Component C(GameObject o, string type) => o.GetComponent(T(type));
     static Transform Foot(GameObject player) => player.GetComponentsInChildren<Transform>().First(t => t.name == "foot.L");
+    // Use the paired keyboard through the real Input System without coupling this
+    // editor test assembly to Assembly-CSharp or package assembly references.
+    static void KeyboardState(params string[] pressed)
+    {
+        // The editor test runner's progress window can own native focus even
+        // after GameView.Focus(). Notify the player loop of the same focus
+        // event before injecting this test's synthetic keyboard state.
+        UnityEditorInternal.InternalEditorUtility.OnGameViewFocus(true);
+        var keyType = T("UnityEngine.InputSystem.Key");
+        var keys = Array.CreateInstance(keyType, pressed.Length);
+        for (int i = 0; i < pressed.Length; i++) keys.SetValue(Enum.Parse(keyType, pressed[i]), i);
+        var stateType = T("UnityEngine.InputSystem.LowLevel.KeyboardState");
+        object state = Activator.CreateInstance(stateType, new object[] { keys });
+        var keyboard = T("UnityEngine.InputSystem.Keyboard").GetProperty("current").GetValue(null);
+        Assert.IsNotNull(keyboard, "The demo's shared keyboard must be available");
+        T("UnityEngine.InputSystem.InputSystem").GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(m => m.Name == "QueueStateEvent" && m.IsGenericMethodDefinition)
+            .MakeGenericMethod(stateType).Invoke(null, new[] { keyboard, state, (object)(-1d) });
+    }
+    static void ResetKeyboard()
+    {
+        KeyboardState();
+        // Flush the release before ExitPlayMode reloads the domain; otherwise
+        // the following test can inherit the previous synthetic aim key.
+        T("UnityEngine.InputSystem.InputSystem").GetMethod("Update", Type.EmptyTypes).Invoke(null, null);
+    }
+    static void CheckMovingContacts(GameObject player)
+    {
+        var grip = player.GetComponentInChildren(T("TA.AdaptiveAnimation.HeldObjectGripController"));
+        Assert.Greater((float)F(grip, "currentWeight"), .95f, player.name + " must keep the hose grip active");
+        var slot = C(player, "TA.AdaptiveAnimation.CharacterModelSlot");
+        var visuals = (GameObject)F(slot, "generatedVisuals");
+        foreach (string side in new[] { "L", "R" })
+        {
+            var constraint = F(grip, side == "L" ? "leftArmIK" : "rightArmIK");
+            Type type = constraint.GetType(); FieldInfo dataField = null;
+            while (type != null && dataField == null) { dataField = type.GetField("m_Data", Flags); type = type.BaseType; }
+            var target = (Transform)P(dataField.GetValue(constraint), "target");
+            var visibleHand = visuals.GetComponentsInChildren<Transform>().First(t => t.name == "hand." + side);
+            Assert.Less(Vector3.Distance(visibleHand.position, target.position), .045f,
+                player.name + " visible hand " + side + " must stay on the hose during movement");
+        }
+    }
+    static void CheckRearCableContact(Component hose, GameObject rear)
+    {
+        var cable = (Component)F(hose, "cable");
+        var points = ((IEnumerable)P(cable, "Points")).Cast<Transform>().ToArray();
+        Assert.GreaterOrEqual(points.Length, 3);
+        Assert.Less(Vector3.Distance(points[points.Length - 3].position, rear.transform.position), .025f,
+            "The rear grip must lift the actual physical hose point");
+    }
+    static void CheckStraightSpan(Component hose)
+    {
+        var cable = (Component)F(hose, "cable");
+        var points = ((IEnumerable)P(cable, "Points")).Cast<Transform>().ToArray();
+        var front = (Component)P(hose, "FrontPlayer");
+        var rear = (Component)P(hose, "RearPlayer");
+        Assert.Less(Vector3.Distance(rear.transform.position, (Vector3)Call(hose, "RearStance")), .05f,
+            "Check straightness after the rear operator settles into formation");
+        Vector3 forward = Vector3.ProjectOnPlane((Vector3)P(hose, "AimDirection"), Vector3.up).normalized;
+        Vector3 span = Vector3.ProjectOnPlane(points[points.Length - 2].position - points[points.Length - 3].position, Vector3.up);
+        Assert.Greater(span.magnitude, .6f, "The straight supported span must extend between the two operators");
+        Assert.Less(Vector3.Cross(span, forward).magnitude, .015f,
+            "The between-player span must follow the formation rather than bending around a guide behind the front player");
+        Assert.Greater(Vector3.Dot(span.normalized, forward), .995f);
+        Assert.Greater(Vector3.Dot(points[points.Length - 2].position - front.transform.position, forward), .1f,
+            "Keep the short nozzle lead in front of the front operator, outside the torso");
+    }
+    static void CheckNozzleGeometry(GameObject player, GameObject nozzle)
+    {
+        var slot = C(player, "TA.AdaptiveAnimation.CharacterModelSlot");
+        var visuals = (GameObject)F(slot, "generatedVisuals");
+        var skins = visuals.GetComponentsInChildren<SkinnedMeshRenderer>()
+            .Where(r => r.enabled && new[] { "Kepala", "Badan", "Baju", "Kerah_Baju" }.Contains(r.name)).ToArray();
+        foreach (string name in new[] { "Kepala", "Badan", "Baju", "Kerah_Baju" })
+            Assert.IsTrue(skins.Any(r => r.name == name), "Missing visible body geometry " + name);
+        var filters = nozzle.GetComponentsInChildren<MeshFilter>()
+            .Where(f => f.sharedMesh && f.TryGetComponent<MeshRenderer>(out var r) && r.enabled).ToArray();
+        Assert.Greater(filters.Length, 0, "Nozzle must have visible geometry to test");
+        var probes = new System.Collections.Generic.List<GameObject>();
+        var bakedMeshes = new System.Collections.Generic.List<Mesh>();
+        try
+        {
+            var bodyColliders = new System.Collections.Generic.List<MeshCollider>();
+            foreach (var skin in skins)
+            {
+                var mesh = new Mesh { name = "Baked " + skin.name };
+                bakedMeshes.Add(mesh);
+                skin.BakeMesh(mesh, true);
+                mesh.vertices = mesh.vertices.Select(skin.transform.TransformPoint).ToArray();
+                mesh.RecalculateBounds();
+                var probe = new GameObject("Hose body probe " + skin.name);
+                probes.Add(probe);
+                var collider = probe.AddComponent<MeshCollider>();
+                collider.sharedMesh = mesh;
+                // These colliders must remain enabled until the query has cooked
+                // their meshes. They are destroyed before any physics step occurs.
+                collider.convex = false;
+                bodyColliders.Add(collider);
+            }
+            var nozzleColliders = new System.Collections.Generic.List<Collider>();
+            foreach (var filter in filters)
+            {
+                var probe = new GameObject("Hose nozzle probe " + filter.name);
+                probes.Add(probe);
+                probe.transform.SetPositionAndRotation(filter.transform.position, filter.transform.rotation);
+                probe.transform.localScale = filter.transform.lossyScale;
+                var collider = probe.AddComponent<MeshCollider>();
+                collider.convex = true;
+                collider.sharedMesh = filter.sharedMesh;
+                nozzleColliders.Add(collider);
+            }
+            var hose = C(nozzle, "TA.AdaptiveAnimation.CooperativeFireHose");
+            var cable = (Component)F(hose, "cable");
+            var points = ((IEnumerable)P(cable, "Points")).Cast<Transform>().ToArray();
+            float radius = (float)F(cable, "size") * .5f;
+            for (int i = points.Length - 4; i < points.Length - 1; i++)
+            {
+                Vector3 start = points[i].position, end = points[i + 1].position;
+                var probe = new GameObject("Hose held span probe " + i);
+                probes.Add(probe);
+                probe.transform.SetPositionAndRotation((start + end) * .5f, Quaternion.LookRotation(end - start));
+                var collider = probe.AddComponent<CapsuleCollider>();
+                collider.direction = 2;
+                collider.radius = radius;
+                collider.height = Vector3.Distance(start, end) + radius * 2f;
+                nozzleColliders.Add(collider);
+            }
+            Physics.SyncTransforms();
+            foreach (var body in bodyColliders)
+                Assert.Greater(body.bounds.size.sqrMagnitude, .000001f, body.name + " must be cooked and enabled");
+            foreach (var nozzleCollider in nozzleColliders)
+            {
+                Assert.Greater(nozzleCollider.bounds.size.sqrMagnitude, .000001f,
+                    nozzleCollider.name + " must be cooked and enabled");
+                foreach (var body in bodyColliders)
+                {
+                    Vector3 direction; float depth;
+                    bool overlaps = Physics.ComputePenetration(nozzleCollider, nozzleCollider.transform.position,
+                        nozzleCollider.transform.rotation, body, body.transform.position, body.transform.rotation,
+                        out direction, out depth);
+                    Assert.That(overlaps ? depth : 0f, Is.LessThan(.015f),
+                        player.name + ": " + nozzleCollider.name + " penetrates " + body.name);
+                }
+            }
+        }
+        finally
+        {
+            foreach (var probe in probes) UnityEngine.Object.DestroyImmediate(probe);
+            foreach (var mesh in bakedMeshes) UnityEngine.Object.DestroyImmediate(mesh);
+        }
+    }
     internal static void CheckHandContact(Component grip)
     {
         foreach (string name in new[] { "leftArmIK", "rightArmIK" })
@@ -37,6 +189,7 @@ public class CooperativeHoseTests
     }
     static void Position(GameObject p, Vector3 position)
     {
+        p.transform.SetPositionAndRotation(position, Quaternion.identity);
         p.GetComponent<Rigidbody>().position = position;
         p.GetComponent<Rigidbody>().rotation = Quaternion.identity;
         p.GetComponent<Rigidbody>().velocity = Vector3.zero;
@@ -62,7 +215,7 @@ public class CooperativeHoseTests
     [UnityTest]
     public IEnumerator PickupEventsAndAdaptiveHandContact()
     {
-        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/Gameloop_Demo.unity");
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/AdaptiveAnimation_Demo.unity");
         yield return new EnterPlayMode();
         var p1 = GameObject.Find("Player1"); var p2 = GameObject.Find("Player2");
         var a = C(p1, "HPlayer.InteractionController"); var b = C(p2, "HPlayer.InteractionController");
@@ -70,14 +223,14 @@ public class CooperativeHoseTests
         var hose = C(front, "TA.AdaptiveAnimation.CooperativeFireHose");
         for (float until = Time.time + .3f; Time.time < until;) yield return null;
         float originalFootY = Foot(p1).position.y;
-        Position(p1, new Vector3(front.transform.position.x, .39f, front.transform.position.z - .45f));
+        Position(p1, new Vector3(front.transform.position.x, .68f, front.transform.position.z - .45f));
         Position(p2, p1.transform.position - Vector3.forward * 1.05f);
         for (float until = Time.time + .3f; Time.time < until;) yield return null;
         Call(a, "BeginInteraction");
         Assert.IsTrue((bool)P(a, "IsPickingUp"), "Nozzle must be reachable through the normal grab trigger");
         for (float until = Time.time + 4f; (bool)P(a, "IsPickingUp") && Time.time < until;) yield return null;
         Assert.AreSame(C(front, "TA.AdaptiveAnimation.CooperativeHoseGrip"), P(a, "HeldObject"), "Actual Pickup_Grab event attaches nozzle");
-        Position(p2, new Vector3(rear.transform.position.x, .39f, rear.transform.position.z - .42f));
+        Position(p2, (Vector3)Call(hose, "RearStance"));
         for (float until = Time.time + .3f; Time.time < until;) yield return null;
         Call(b, "BeginInteraction");
         for (float until = Time.time + 4f; (bool)P(b, "IsPickingUp") && Time.time < until;) yield return null;
@@ -111,8 +264,9 @@ public class CooperativeHoseTests
     [UnityTest]
     public IEnumerator PressureRolesReelExtinguishingAndKnockback()
     {
-        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/Gameloop_Demo.unity");
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/AdaptiveAnimation_Demo.unity");
         yield return new EnterPlayMode();
+        ResetKeyboard();
         var p1 = GameObject.Find("Player1"); var p2 = GameObject.Find("Player2");
         Assert.NotNull(p1); Assert.NotNull(p2);
         var a = C(p1, "HPlayer.InteractionController"); var b = C(p2, "HPlayer.InteractionController");
@@ -122,9 +276,10 @@ public class CooperativeHoseTests
         var rg = C(rear, "TA.AdaptiveAnimation.CooperativeHoseGrip");
         var water = C(front, "HGame.Objects.HoseWaterController");
         Debug.Log("HOSE phase setup: " + hose + " / " + water);
-        Position(p1, new Vector3(9, .39f, -22.22f));
-        Position(p2, new Vector3(9, .39f, -23.27f));
+        Position(p1, new Vector3(front.transform.position.x, .68f, front.transform.position.z - .45f));
+        Position(p2, p1.transform.position - Vector3.forward * 1.05f);
         Call(a, "PickUpObject", fg);
+        Position(p2, (Vector3)Call(hose, "RearStance"));
         Call(hose, "StepPressure", true, .1f);
         Assert.AreEqual(0f, P(hose, "Pressure"), "One player cannot spray");
         Call(water, "ToggleShooting");
@@ -135,6 +290,9 @@ public class CooperativeHoseTests
         Physics.SyncTransforms();
         Assert.IsTrue((bool)P(hose, "ReadyToSpray"));
         Debug.Log("HOSE phase team ready");
+        // Allow the newly captured endpoint's physics transform and its
+        // child muzzle to settle before measuring pressure and casting a stream.
+        for (float until = Time.time + .2f; Time.time < until;) yield return null;
         for (int i = 0; i < 35; i++) Call(hose, "StepPressure", true, .1f);
         Assert.That((float)P(hose, "Pressure"), Is.EqualTo(.7f).Within(.002f));
         Assert.IsTrue((bool)P(water, "IsShooting"));
@@ -156,9 +314,10 @@ public class CooperativeHoseTests
         Assert.IsNotNull(cable, "Scene hose must retain cable reference");
         Debug.Log("HOSE reel length=" + P(hose, "HoseLength") + " joints=" + cable.GetComponentsInChildren<SpringJoint>().Length);
         // Avoid capturing iterator locals across EnterPlayMode's domain reload.
+        float restLength = 0f;
         foreach (var joint in cable.GetComponentsInChildren<SpringJoint>())
-            if (joint.connectedBody && joint.connectedBody.transform.IsChildOf(cable.transform))
-                Assert.That(joint.maxDistance, Is.EqualTo(.9f).Within(.001f), "Physical cable joints must change length");
+            if (joint.connectedBody && joint.connectedBody.transform.IsChildOf(cable.transform)) restLength += joint.maxDistance;
+        Assert.That(restLength, Is.EqualTo(9f).Within(.01f), "Free cable and held spans must share the total reel length");
         Call(hose, "ToggleReel", b, 1);
         Assert.AreEqual(0, P(hose, "ReelDirection"), "Second press stops the toggle");
         Call(hose, "ToggleReel", b, -1); Call(hose, "StepReel", .5f);
@@ -176,6 +335,8 @@ public class CooperativeHoseTests
 
         // Exercise the existing Fire.TryExtinguish path, including an obstruction and a non-fire trigger.
         var origin = (Transform)F(water, "raycastOrigin");
+        Assert.Less(Vector3.Angle(origin.forward, (Vector3)P(hose, "AimDirection")), 1f,
+            "The visible muzzle must face the nozzle aim before the fire test");
         var fireGo = new GameObject("HoseTargetFire");
         fireGo.transform.position = origin.position + origin.forward * 1.5f - Vector3.up * .35f;
         var fireCollider = fireGo.AddComponent<BoxCollider>(); fireCollider.size = Vector3.one; fireCollider.isTrigger = true;
@@ -189,6 +350,13 @@ public class CooperativeHoseTests
         Assert.AreEqual(1f, Call(fire, "GetIntensity"), "Wall blocks the stream");
         blocker.GetComponent<Collider>().isTrigger = true; Physics.SyncTransforms();
         for (int i = 0; i < 100; i++) Call(water, "HandleFireExtinguishing");
+        if ((float)Call(fire, "GetIntensity") > 0f)
+        {
+            Debug.Log("HOSE blocked trace: ready=" + P(hose, "ReadyToSpray") + " pressure=" + P(hose, "Pressure") +
+                " flow=" + P(water, "Flow") + " origin=" + origin.position + " forward=" + origin.forward);
+            foreach (var hit in Physics.RaycastAll(origin.position, origin.forward, 2f, ~0, QueryTriggerInteraction.Collide))
+                Debug.Log("HOSE hit " + hit.collider.name + " trigger=" + hit.collider.isTrigger + " at=" + hit.point);
+        }
         Assert.LessOrEqual((float)Call(fire, "GetIntensity"), 0f, "Existing fire extinguishes; non-fire triggers do not obstruct");
         UnityEngine.Object.Destroy(blocker); UnityEngine.Object.Destroy(fireGo);
         for (float until = Time.time + .8f; Time.time < until;) yield return null;
@@ -205,13 +373,132 @@ public class CooperativeHoseTests
         Assert.Greater(Vector3.Distance(before, p1.transform.position), .2f, "Front player must actually recoil");
         Assert.IsFalse((bool)P(mover, "IsKnockedBack"), "Movement control must recover");
 
-        Position(p2, new Vector3(9, .39f, -22.22f)); Position(p1, new Vector3(9, .39f, -23.27f));
-        Call(b, "PickUpObject", fg); Call(a, "PickUpObject", rg); Physics.SyncTransforms();
+        Position(p2, new Vector3(front.transform.position.x, .68f, front.transform.position.z - .45f));
+        Position(p1, p2.transform.position - Vector3.forward * 1.05f);
+        Call(b, "PickUpObject", fg);
+        Position(p1, (Vector3)Call(hose, "RearStance"));
+        Call(a, "PickUpObject", rg); Physics.SyncTransforms();
         Assert.AreSame(b, P(hose, "FrontPlayer")); Assert.AreSame(a, P(hose, "RearPlayer"));
         Assert.IsTrue((bool)P(hose, "HasTeam"), "Roles must work when players swap");
         ((Behaviour)a).enabled = false;
         Assert.IsFalse((bool)P(hose, "HasTeam")); Assert.IsNull(P(b, "HeldObject"));
         Assert.IsNull(P(C(p2, "ThirdPersonPlayerController"), "CooperativeHose"));
+        yield return new ExitPlayMode();
+    }
+
+    [UnityTest]
+    public IEnumerator MovingHoseKeepsVisibleContactsAndMatchesWalkingCadence()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/AdaptiveAnimation_Demo.unity");
+        yield return new EnterPlayMode();
+        UnityEditor.EditorWindow.GetWindow(T("UnityEditor.GameView")).Focus();
+        var p1 = GameObject.Find("Player1"); var p2 = GameObject.Find("Player2");
+        var front = GameObject.Find("HoseNozzle"); var rear = GameObject.Find("Hose_RearGrip");
+        var hose = C(front, "TA.AdaptiveAnimation.CooperativeFireHose");
+        var a = C(p1, "HPlayer.InteractionController"); var b = C(p2, "HPlayer.InteractionController");
+        for (float until = Time.time + .3f; Time.time < until;) yield return null;
+        Position(p2, new Vector3(rear.transform.position.x, .68f, rear.transform.position.z - .2f));
+        Call(b, "PickUpObject", C(rear, "TA.AdaptiveAnimation.CooperativeHoseGrip"));
+        for (float until = Time.time + .7f; Time.time < until;) yield return null;
+        CheckRearCableContact(hose, rear);
+        CheckMovingContacts(p2);
+        Position(p1, new Vector3(front.transform.position.x, .68f, front.transform.position.z - .45f));
+        Call(a, "PickUpObject", C(front, "TA.AdaptiveAnimation.CooperativeHoseGrip"));
+        Position(p2, (Vector3)Call(hose, "RearStance"));
+        try
+        {
+            KeyboardState();
+            for (float until = Time.realtimeSinceStartup + 10f; !(bool)P(C(p1, "HPlayer.LocalPlayerInput"), "IsReady") && Time.realtimeSinceStartup < until;)
+            {
+                UnityEditor.EditorWindow.GetWindow(T("UnityEditor.GameView")).Focus();
+                UnityEditorInternal.InternalEditorUtility.OnGameViewFocus(true);
+                yield return null;
+            }
+            for (float until = Time.time + .7f; Time.time < until;) yield return null;
+            Assert.IsTrue((bool)P(C(p1, "HPlayer.LocalPlayerInput"), "IsReady"), "Game view must receive real keyboard input");
+            Assert.IsTrue((bool)P(hose, "ReadyToSpray"));
+            CheckNozzleGeometry(p1, front);
+            CheckNozzleGeometry(p2, front);
+            CheckStraightSpan(hose);
+            var motionRange = new Bounds((Vector3)P(hose, "CarryMotionOffset"), Vector3.zero);
+            foreach (string key in new[] { "W", "D", "S" })
+            {
+                KeyboardState(key);
+                for (float until = Time.time + .7f; Time.time < until;) yield return null;
+                var before = new[] { p1.GetComponent<Rigidbody>().position, p2.GetComponent<Rigidbody>().position };
+                float started = Time.time;
+                while (Time.time < started + .6f)
+                {
+                    yield return null;
+                    CheckMovingContacts(p1); CheckMovingContacts(p2);
+                    CheckRearCableContact(hose, rear);
+                    Vector3 offset = (Vector3)P(hose, "CarryMotionOffset");
+                    Assert.Less(offset.magnitude, .025f, "Dynamic carrying must stay inside the calibrated hand-reach margin");
+                    motionRange.Encapsulate(offset);
+                }
+                float elapsed = Time.time - started;
+                var players = new[] { p1, p2 };
+                for (int i = 0; i < players.Length; i++)
+                {
+                    var player = players[i];
+                    float actualSpeed = Vector3.Distance(before[i], player.GetComponent<Rigidbody>().position) / elapsed;
+                    Assert.Greater(actualSpeed, .25f, key + " must actually move " + player.name);
+                    var movement = C(player, "ThirdPersonPlayerController");
+                    float reference = (float)F(movement, "_walkAnimationReferenceSpeed");
+                    var animator = player.GetComponent<Animator>();
+                    float rate = animator.GetFloat("LocomotionRate");
+                    Assert.That(Mathf.Abs(rate) * reference / actualSpeed, Is.InRange(.8f, 1.2f),
+                        key + " gait rate must track measured ground speed for " + player.name);
+                    Assert.IsTrue(animator.GetBool("isWalking"));
+                    if (key == "S") Assert.Less(rate, 0f, "Backward motion must reverse the walking cycle");
+                }
+                if (key == "W")
+                {
+                    CheckNozzleGeometry(p1, front);
+                    CheckNozzleGeometry(p2, front);
+                    Capture("Temp/Hose-Moving.png", (p1.transform.position + p2.transform.position) * .5f + Vector3.up * .4f);
+                    Capture("Temp/Hose-Straight-Dynamic.png", (p1.transform.position + p2.transform.position) * .5f + Vector3.up * .4f);
+                }
+            }
+            Assert.Greater(motionRange.size.magnitude, .003f,
+                "The held hose must visibly respond to walking instead of remaining locked to a static pose");
+            KeyboardState("L");
+            Vector3 originalAim = (Vector3)P(hose, "AimDirection");
+            for (float until = Time.time + 1.5f; Time.time < until;)
+            {
+                yield return null;
+                CheckMovingContacts(p1); CheckMovingContacts(p2);
+                CheckRearCableContact(hose, rear);
+                Assert.IsTrue((bool)P(hose, "ReadyToSpray"), "Sustained aiming must keep the rear operator in formation");
+            }
+            Assert.Greater(Vector3.Angle(originalAim, (Vector3)P(hose, "AimDirection")), 15f, "L input must steer the actual nozzle");
+            KeyboardState();
+            for (float until = Time.time + 1f; Time.time < until;) yield return null;
+            foreach (var player in new[] { p1, p2 })
+            {
+                Assert.IsFalse(player.GetComponent<Animator>().GetBool("isWalking"), player.name + " must stop its gait when the team stops");
+                CheckMovingContacts(player);
+            }
+            CheckRearCableContact(hose, rear);
+            CheckNozzleGeometry(p1, front);
+            CheckStraightSpan(hose);
+            foreach (string aimKey in new[] { "I", "K" })
+            {
+                KeyboardState(aimKey);
+                for (float until = Time.time + .6f; Time.time < until;) yield return null;
+                KeyboardState();
+                for (float until = Time.time + .5f; Time.time < until;) yield return null;
+                CheckNozzleGeometry(p1, front);
+                CheckMovingContacts(p1); CheckMovingContacts(p2);
+                CheckRearCableContact(hose, rear);
+                if (aimKey == "I") Capture("Temp/Hose-AimUp.png", (p1.transform.position + p2.transform.position) * .5f + Vector3.up * .4f);
+            }
+        }
+        finally
+        {
+            ResetKeyboard();
+            Call(hose, "ReleaseTeam");
+        }
         yield return new ExitPlayMode();
     }
 }

@@ -20,6 +20,13 @@ namespace TA.AdaptiveAnimation
         public readonly List<AdaptiveSceneProp> Props = new();
         public bool IsReady { get; private set; }
 
+        // Scene-authored players can be assigned in the Inspector; spawned players
+        // are supplied by the spawner before this adapter's Start coroutine runs.
+        public void BindPlayerReference(CapsuleCollider player)
+        {
+            if (!playerReference && player) playerReference = player;
+        }
+
         public static ScenePropSize Classify(Vector3 size, float playerHeight)
         {
             float longest = Mathf.Max(size.x, size.y, size.z);
@@ -115,6 +122,11 @@ namespace TA.AdaptiveAnimation
             shape.isTrigger = solid;
             root.AddComponent<CarryAnimationLoad>().Configure(weight);
             float gripY = Mathf.Min(0f, .55f - dimensions.y * .5f);
+            // These imported models have readable meshes and calibrated surface grips.
+            bool surfaceGrip = visual.name.StartsWith("Props_Computer_01") || visual.name.StartsWith("Props_Table_01");
+            var provider = root.AddComponent<ScenePropGripProvider>();
+            provider.Configure(shape, gripY, team, surfaceGrip);
+            gripY = provider.GripHeight;
             Liftable liftable;
             if (team)
             {
@@ -126,12 +138,11 @@ namespace TA.AdaptiveAnimation
                 liftable = root.AddComponent<Liftable>();
                 var attachment = root.AddComponent<StableCarryAttachment>();
                 // The placeholder's short forearms need the near face slightly behind CarryAnchor.
-                attachment.ConfigureOffset(new Vector3(0f, -gripY, dimensions.z * .5f - .08f));
+                attachment.ConfigureOffset(-provider.SingleGripCenter + Vector3.back * .08f);
                 attachment.DynamicOnRelease = true;
                 root.AddComponent<CarryWeightMovement>().Configure(speedProfile);
             }
             liftable.enabled = false;
-            root.AddComponent<ScenePropGripProvider>().Configure(shape, gripY, team);
             var metadata = root.AddComponent<AdaptiveSceneProp>(); metadata.Configure(category, dimensions, team, visual);
             Props.Add(metadata);
             root.SetActive(wasActive);

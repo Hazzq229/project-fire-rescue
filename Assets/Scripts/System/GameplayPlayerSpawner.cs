@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -27,11 +27,13 @@ public class GameplayPlayerSpawner : MonoBehaviour
 
     [Header("Diagnostics")]
     [SerializeField] private bool logDiagnostics = true;
+    [Tooltip("Route spawned players through the shared five-parameter animation context.")]
+    [SerializeField] private bool enableAdaptiveInteractionContext;
 
     private readonly PlayerInput[] _spawnedPlayers = new PlayerInput[2];
     private readonly Transform[] _spawnPoints = new Transform[2];
 
-    private void Start()
+    private void Awake()
     {
         _spawnPoints[0] = player1SpawnPoint;
         _spawnPoints[1] = player2SpawnPoint;
@@ -53,9 +55,27 @@ public class GameplayPlayerSpawner : MonoBehaviour
         SpawnPlayer(0, player1SpawnPoint);
         SpawnPlayer(1, player2SpawnPoint);
 
+        AssignAdaptivePropReferences();
         AssignCameraTargets();
         AssignWallOcclusionTargets();
+    }
+
+    private void Start()
+    {
         StartCoroutine(LogPositionsNextFrame());
+    }
+
+    private void AssignAdaptivePropReferences()
+    {
+        CapsuleCollider reference = null;
+        foreach (var player in _spawnedPlayers)
+        {
+            if (player && player.TryGetComponent(out reference)) break;
+        }
+        if (!reference) return;
+        foreach (var adapter in FindObjectsOfType<TA.AdaptiveAnimation.AdaptiveSceneProps>())
+            if (adapter.gameObject.scene == gameObject.scene)
+                adapter.BindPlayerReference(reference);
     }
 
     private void AssignWallOcclusionTargets()
@@ -110,6 +130,20 @@ public class GameplayPlayerSpawner : MonoBehaviour
     private void SpawnPlayer(int slotIndex, Transform spawnPoint)
     {
         LocalCoopSession.PlayerSlot slot = LocalCoopSession.GetPlayer(slotIndex);
+#if UNITY_EDITOR
+        if (slot == null || !slot.IsJoined)
+        {
+            LocalCoopSession.SetCharacterIndex(slotIndex, 0);
+            slot = LocalCoopSession.GetPlayer(slotIndex);
+            if (slot != null)
+            {
+                slot.ControlScheme = slotIndex == 0 ? "KeyboardWASD" : "KeyboardArrows";
+                var dev = Keyboard.current != null ? new InputDevice[] { Keyboard.current } : UnityEngine.InputSystem.InputSystem.devices.ToArray();
+                slot.Devices = dev;
+                slot.IsJoined = true;
+            }
+        }
+#endif
         if (slot == null || !slot.IsJoined)
         {
             Debug.LogWarning($"[GameplayPlayerSpawner] Player {slotIndex + 1} did not join; no character spawned.", this);
@@ -156,7 +190,10 @@ public class GameplayPlayerSpawner : MonoBehaviour
             return;
         }
 
+        playerInput.gameObject.name = string.Format("Player{0}", slotIndex + 1);
         _spawnedPlayers[slotIndex] = playerInput;
+        if (enableAdaptiveInteractionContext && !playerInput.TryGetComponent<TA.AdaptiveAnimation.AdaptiveAnimationManager>(out _))
+            playerInput.gameObject.AddComponent<TA.AdaptiveAnimation.AdaptiveAnimationManager>();
 
         // Keep the player's chosen scheme stable and reassert the exact saved device assignment.
         playerInput.neverAutoSwitchControlSchemes = true;

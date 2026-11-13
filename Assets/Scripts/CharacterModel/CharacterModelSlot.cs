@@ -13,6 +13,11 @@ namespace TA.AdaptiveAnimation
         public Transform skeletonRoot;
         [Tooltip("Drag a model/FBX prefab with the same bone names, hierarchy and rest pose here.")]
         public GameObject replacementModel;
+        [Header("Optional rigid headgear fit on the replacement")]
+        public string headgearMeshName = "Topi_Pemadam";
+        [Min(.1f)] public float headgearScale = 1f;
+        [Tooltip("Lift in player world units; applied in the head bone's space.")]
+        public float headgearLift;
         [HideInInspector] public GameObject appliedModel;
         [HideInInspector] public GameObject generatedVisuals;
         [HideInInspector] public GameObject[] boneAttachments;

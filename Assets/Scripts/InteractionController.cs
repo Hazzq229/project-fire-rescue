@@ -42,9 +42,14 @@ namespace HPlayer
         public bool Interacting { get; private set; }
         public bool IsPickingUp { get; private set; }
         public bool IsPlacingDown { get; private set; }
+        public Liftable PendingPickupObject => IsPickingUp && !IsPlacingDown ? pendingObject : null;
         private Vector3 placementStart, placementTarget;
         private float placementContactTime = .763f;
         private bool placementWasKinematic;
+        private TA.AdaptiveAnimation.CarryMotionGuard placementGuard;
+        private Rigidbody[] placementBodies;
+        private Quaternion placementRotation;
+        private bool placementCancelled;
         public Vector3 PlacementPosition { get; private set; }
         public bool ExternalInteractionLocked { get; set; }
 
@@ -253,13 +258,23 @@ namespace HPlayer
 
         private void FinishPickup()
         {
-            if (IsPlacingDown && HeldObject) DropObject(HeldObject);
+            var retainedPlacement = IsPlacingDown ? HeldObject : null;
+            // A refused/interrupted placement retains ownership. Never force an
+            // obstructed object into its final pose or drop it from mid-air.
+            if (IsPlacingDown && HeldObject && !(HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject))
+            {
+                HeldObject.Rigidbody.isKinematic = placementWasKinematic;
+                if (grabJoint) { grabJoint.spring = jointSpring; grabJoint.damper = jointDamper; }
+            }
             IsPlacingDown = false;
             IsPickingUp = false;
             pickupEntered = false;
             pendingObject = null;
+            placementGuard = null; placementBodies = null;
             if (animator && animator.runtimeAnimatorController) animator.ResetTrigger(PickupId);
             if (playerController) playerController.SetMovementLocked(false);
+            if (retainedPlacement is TA.AdaptiveAnimation.CooperativeCarryObject team)
+                team.ResumeAfterPlacement();
         }
 
         private void OnTriggerEnter(Collider other) => TrackCandidate(other);
@@ -401,22 +416,27 @@ namespace HPlayer
             var holders = HeldObject.Holders.ToArray();
             foreach (var holder in holders)
                 if (holder is InteractionController partner && (partner.IsPickingUp || partner.ExternalInteractionLocked)) return;
+            var owner = holders.Length > 0 ? holders[0] as InteractionController : null;
+            if (!owner || !owner.TryPlanPlacement(HeldObject, out Vector3 target)) return;
+            Quaternion rotation = HeldObject.Rigidbody.rotation;
             foreach (var holder in holders)
-                if (holder is InteractionController partner) partner.BeginPlaceLocal();
+                if (holder is InteractionController partner) partner.BeginPlaceLocal(target, rotation);
         }
 
-        private void BeginPlaceLocal()
+        private void BeginPlaceLocal(Vector3 target, Quaternion rotation)
         {
             IsPlacingDown = IsPickingUp = true;
             pickupEntered = grabEventReceived = false;
             pickupRequestedAt = Time.time;
-            placementStart = PlacementPosition = HeldObject.transform.position;
-            placementTarget = GroundPlacement(HeldObject);
+            placementStart = PlacementPosition = HeldObject.Rigidbody.position;
+            placementTarget = target;
+            placementRotation = rotation;
+            placementCancelled = false;
             placementWasKinematic = HeldObject.Rigidbody.isKinematic;
             foreach (var clip in animator.runtimeAnimatorController.animationClips)
                 foreach (var evt in clip.events)
                     if (evt.functionName == "Pickup_Grab") placementContactTime = evt.time / clip.length;
-            DestroyGrabJoint();
+            if (grabJoint) { grabJoint.spring = 0f; grabJoint.damper = 0f; }
             if (!(HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject))
                 HeldObject.Rigidbody.isKinematic = true;
             playerController.SetMovementLocked(true);
@@ -424,12 +444,23 @@ namespace HPlayer
             animator.SetTrigger(PickupId);
         }
 
-        private Vector3 GroundPlacement(Liftable item)
+        private bool TryPlanPlacement(Liftable item, out Vector3 target)
         {
-            var bounds = new Bounds(item.transform.position, Vector3.zero);
+            target = item.Rigidbody.position;
+            var bounds = new Bounds(); bool foundShape = false;
             foreach (var col in item.GetComponentsInChildren<Collider>())
-                if (!col.isTrigger) bounds.Encapsulate(col.bounds);
-            Vector3 point = item.transform.position;
+                if (col.enabled && !col.isTrigger && col.attachedRigidbody == item.Rigidbody)
+                {
+                    if (!foundShape) { bounds = col.bounds; foundShape = true; }
+                    else bounds.Encapsulate(col.bounds);
+                }
+            if (!foundShape) return false;
+            var bodies = new List<Rigidbody> { item.Rigidbody };
+            foreach (var holder in item.Holders)
+                if (holder is InteractionController actor && actor.playerRb) bodies.Add(actor.playerRb);
+            placementBodies = bodies.ToArray();
+            placementGuard = new TA.AdaptiveAnimation.CarryMotionGuard(placementBodies);
+            placementRotation = item.Rigidbody.rotation;
             Vector3 offset = Vector3.zero;
             if (item.SupportsStableSingleCarry)
             {
@@ -439,20 +470,56 @@ namespace HPlayer
                 float clearance = (capsule ? capsule.radius * transform.lossyScale.x : .3f) + extent + .04f;
                 float distance = Vector3.Dot(bounds.center - transform.position, forward);
                 offset = forward * Mathf.Max(0f, clearance - distance);
-                point += offset;
             }
-            float bottomOffset = point.y - bounds.min.y;
-            float nearest = float.PositiveInfinity;
-            foreach (var hit in Physics.RaycastAll(new Vector3(bounds.center.x + offset.x, bounds.max.y + .1f, bounds.center.z + offset.z),
-                Vector3.down, 5f, ~0, QueryTriggerInteraction.Ignore))
+            var offsets = new List<Vector3> { offset, Vector3.zero };
+            foreach (float distance in new[] { .15f, .3f, .45f, .6f })
             {
-                if (hit.collider.transform.IsChildOf(item.transform) ||
-                    hit.collider.GetComponentInParent<InteractionController>() || hit.normal.y < .7f) continue;
-                if (hit.distance >= nearest) continue;
-                nearest = hit.distance;
-                point.y = hit.point.y + bottomOffset + .01f;
+                offsets.Add(offset + transform.right * distance);
+                offsets.Add(offset - transform.right * distance);
             }
-            return point;
+            foreach (var candidate in offsets)
+            {
+                if (!SupportedPlacement(item, bounds, candidate, out Vector3 point)) continue;
+                if (PlacementFraction(point) < .9999f) continue;
+                target = point;
+                return true;
+            }
+            placementGuard = null; placementBodies = null;
+            return false;
+        }
+
+        private bool SupportedPlacement(Liftable item, Bounds bounds, Vector3 offset, out Vector3 point)
+        {
+            point = item.Rigidbody.position + offset;
+            float support = float.NegativeInfinity;
+            // The footprint must have support, not only a center ray over an edge.
+            foreach (var sample in new[] { Vector2.zero, new Vector2(-.9f, -.9f), new Vector2(-.9f, .9f),
+                new Vector2(.9f, -.9f), new Vector2(.9f, .9f) })
+            {
+                var origin = new Vector3(bounds.center.x + offset.x + sample.x * bounds.extents.x,
+                    bounds.max.y + .15f, bounds.center.z + offset.z + sample.y * bounds.extents.z);
+                float highest = float.NegativeInfinity;
+                foreach (var hit in Physics.RaycastAll(origin, Vector3.down, 5f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    if (hit.collider.transform.IsChildOf(item.transform) || hit.collider.GetComponentInParent<InteractionController>() ||
+                        hit.normal.y < .7f || hit.point.y > bounds.min.y + .05f) continue;
+                    highest = Mathf.Max(highest, hit.point.y);
+                }
+                if (float.IsNegativeInfinity(highest)) return false;
+                support = Mathf.Max(support, highest);
+            }
+            point.y = support + (item.Rigidbody.position.y - bounds.min.y) + .01f;
+            return true;
+        }
+
+        private float PlacementFraction(Vector3 position)
+        {
+            if (placementGuard == null || placementBodies == null) return 0f;
+            var positions = new Vector3[placementBodies.Length]; var rotations = new Quaternion[placementBodies.Length];
+            for (int i = 0; i < placementBodies.Length; i++)
+            { positions[i] = placementBodies[i].position; rotations[i] = placementBodies[i].rotation; }
+            positions[0] = position; rotations[0] = placementRotation;
+            return placementGuard.Limit(positions, rotations);
         }
 
         private void UpdatePlacement()
@@ -468,13 +535,17 @@ namespace HPlayer
         private void ApplyPlacementPosition()
         {
             if (!HeldObject || HeldObject.Holders.Count == 0 || !ReferenceEquals(HeldObject.Holders[0], this)) return;
-            HeldObject.transform.position = PlacementPosition;
+            float fraction = PlacementFraction(PlacementPosition);
+            PlacementPosition = Vector3.Lerp(HeldObject.Rigidbody.position, PlacementPosition, fraction);
+            HeldObject.transform.SetPositionAndRotation(PlacementPosition, placementRotation);
             HeldObject.Rigidbody.position = PlacementPosition;
+            HeldObject.Rigidbody.rotation = placementRotation;
+            Physics.SyncTransforms();
         }
 
         private void CompletePlacement()
         {
-            if (!HeldObject) return;
+            if (!HeldObject || placementCancelled) return;
             var item = HeldObject;
             // Either animation may deliver its contact event first; one owner commits the shared pose.
             if (item.Holders.Count > 0 && item.Holders[0] is InteractionController first && first != this)
@@ -484,6 +555,12 @@ namespace HPlayer
             }
             PlacementPosition = placementTarget;
             ApplyPlacementPosition();
+            if (Vector3.Distance(item.Rigidbody.position, placementTarget) > .005f)
+            {
+                foreach (var holder in item.Holders)
+                    if (holder is InteractionController partner) partner.placementCancelled = true;
+                return;
+            }
             DropObject(item);
             if (!item.Rigidbody.isKinematic)
             {

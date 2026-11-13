@@ -19,8 +19,32 @@ public static class CharacterModelReplacement
     {
         var items = renderers.Where(renderer => renderer).ToArray();
         if (items.Length == 0) throw new InvalidOperationException("Model tidak memiliki renderer.");
-        var bounds = items[0].bounds;
-        foreach (var renderer in items.Skip(1)) bounds.Encapsulate(renderer.bounds);
+        var bounds = new Bounds();
+        bool first = true;
+        foreach (var renderer in items)
+        {
+            if (renderer is SkinnedMeshRenderer skin && skin.sharedMesh && skin.sharedMesh.vertexCount > 0)
+            {
+                var baked = new Mesh();
+                try
+                {
+                    skin.BakeMesh(baked, true);
+                    foreach (var vertex in baked.vertices)
+                    {
+                        Vector3 point = skin.transform.TransformPoint(vertex);
+                        if (first) { bounds = new Bounds(point, Vector3.zero); first = false; }
+                        else bounds.Encapsulate(point);
+                    }
+                }
+                finally { Object.DestroyImmediate(baked); }
+            }
+            else if (renderer is MeshRenderer)
+            {
+                if (first) { bounds = renderer.bounds; first = false; }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+        }
+        if (first) throw new InvalidOperationException("Model tidak memiliki geometri yang dapat diukur.");
         return bounds;
     }
 
@@ -89,14 +113,22 @@ public static class CharacterModelReplacement
 
             var visual = new GameObject("CharacterAppearance");
             Undo.RegisterCreatedObjectUndo(visual, "Create character appearance");
-            visual.transform.SetParent(slot.transform, false);
+            Undo.SetTransformParent(visual.transform, slot.transform, "Parent character appearance");
+            Undo.RecordObject(visual.transform, "Align character appearance");
             visual.transform.localPosition = Vector3.zero;
             visual.transform.localRotation = Quaternion.identity;
             visual.transform.localScale = Vector3.one;
 
             var imported = (GameObject)PrefabUtility.InstantiatePrefab(plan.model);
             Undo.RegisterCreatedObjectUndo(imported, "Instantiate replacement model");
-            imported.transform.SetParent(visual.transform, false);
+            Vector3 importedPosition = imported.transform.localPosition;
+            Quaternion importedRotation = imported.transform.localRotation;
+            Vector3 importedScale = imported.transform.localScale;
+            Undo.SetTransformParent(imported.transform, visual.transform, "Parent replacement model");
+            Undo.RecordObject(imported.transform, "Preserve imported model transform");
+            imported.transform.localPosition = importedPosition;
+            imported.transform.localRotation = importedRotation;
+            imported.transform.localScale = importedScale;
 
             var sourceBone = imported.GetComponentsInChildren<Transform>(true)
                 .Single(transform => transform.name == slot.skeletonRoot.name);
@@ -120,6 +152,21 @@ public static class CharacterModelReplacement
             alignmentOffset.y = referenceBounds.min.y - importedBounds.min.y;
             alignmentOffset.z = referenceBounds.center.z - importedBounds.center.z;
             visual.transform.position += alignmentOffset;
+
+            if (!Mathf.Approximately(slot.headgearScale, 1f) || !Mathf.Approximately(slot.headgearLift, 0f))
+            {
+                var headgear = imported.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                    .FirstOrDefault(renderer => renderer.name == slot.headgearMeshName);
+                if (headgear)
+                {
+                    var weights = headgear.sharedMesh.boneWeights;
+                    int bone = weights[0].boneIndex0;
+                    if (weights.Any(weight => weight.boneIndex0 != bone || weight.weight0 < .999f))
+                        throw new InvalidOperationException("Headgear fit requires an accessory rigidly weighted to one bone.");
+                    var fit = Undo.AddComponent<CharacterHeadgearFit>(visual);
+                    fit.Configure(headgear, bone, slot.headgearScale, slot.transform.up * slot.headgearLift);
+                }
+            }
 
             foreach (var renderer in slot.originalRenderers)
                 if (renderer)

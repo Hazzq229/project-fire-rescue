@@ -11205,11 +11205,11 @@ MonoBehaviour:
   hingeBody: {fileID: 807860714}
   closedFrontPoint: {fileID: 17342936}
   closedBackPoint: {fileID: 1387150778}
-  openFrontPoint: {fileID: 1403522504}
-  openBackPoint: {fileID: 926888292}
   openAngle: -90
   openDuration: 0.5
   closeDuration: 0.5
+  interactionReach: 1.1
+  closingClearance: 0.4
 --- !u!4 &250328010
 Transform:
   m_ObjectHideFlags: 0
@@ -56233,6 +56233,7 @@ MonoBehaviour:
   splitScreenManager: {fileID: 677315571}
   wallOcclusionController: {fileID: 19752275}
   logDiagnostics: 1
+  enableAdaptiveInteractionContext: 1
 --- !u!4 &1309883392
 Transform:
   m_ObjectHideFlags: 0
@@ -58843,6 +58844,7 @@ MonoBehaviour:
   gripPreset: 2
   additionalRotationA: {x: 0, y: 0, z: 0}
   additionalRotationB: {x: 0, y: 0, z: 0}
+  maximumHalfSpacing: 0.14
 --- !u!54 &1365425991
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -65896,6 +65898,14 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 1555942870}
+    - targetCorrespondingSourceObject: {fileID: 3372387919650966404, guid: e804a62ea13816a4a83a6225d23db4c2,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1620837954}
+    - targetCorrespondingSourceObject: {fileID: 3372387919650966404, guid: e804a62ea13816a4a83a6225d23db4c2,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1620837953}
   m_SourcePrefab: {fileID: 100100000, guid: e804a62ea13816a4a83a6225d23db4c2, type: 3}
 --- !u!4 &1555942868 stripped
 Transform:
@@ -67946,6 +67956,7 @@ MonoBehaviour:
   gripPreset: 0
   additionalRotationA: {x: 0, y: 0, z: 0}
   additionalRotationB: {x: 0, y: 0, z: 0}
+  maximumHalfSpacing: 0.14
 --- !u!54 &1602430108
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -68949,6 +68960,41 @@ Transform:
     type: 3}
   m_PrefabInstance: {fileID: 1618053565}
   m_PrefabAsset: {fileID: 0}
+--- !u!33 &1620837952 stripped
+MeshFilter:
+  m_CorrespondingSourceObject: {fileID: 1308625305377840795, guid: e804a62ea13816a4a83a6225d23db4c2,
+    type: 3}
+  m_PrefabInstance: {fileID: 1555942867}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1620837953
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1555942869}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4715f5110af58d94cb5a47a2028e2704, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  weightKg: 1
+--- !u!114 &1620837954
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1555942869}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f3eb85324b3d76442832fe1a1e66d083, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sourceMesh: {fileID: 1620837952}
+  axis: 2
+  gripHeight: 0.35
+  maximumHalfSpacing: 0.14
 --- !u!1001 &1621224755
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -75858,6 +75904,7 @@ MonoBehaviour:
   gripPreset: 1
   additionalRotationA: {x: 0, y: 0, z: 0}
   additionalRotationB: {x: 0, y: 0, z: 0}
+  maximumHalfSpacing: 0.14
 --- !u!54 &1798960620
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -76389,11 +76436,11 @@ MonoBehaviour:
   hingeBody: {fileID: 1744573913}
   closedFrontPoint: {fileID: 1911430439}
   closedBackPoint: {fileID: 482281883}
-  openFrontPoint: {fileID: 1344093705}
-  openBackPoint: {fileID: 258871946}
   openAngle: 90
   openDuration: 0.2
   closeDuration: 0.2
+  interactionReach: 1.1
+  closingClearance: 0.4
 --- !u!4 &1818246034
 Transform:
   m_ObjectHideFlags: 0
@@ -81668,10 +81715,13 @@ MonoBehaviour:
   maximumLength: 18
   reelSpeed: 1.5
   separation: 1.05
-  handHeight: 0.6
-  handForward: 0.17
-  movementSpeed: 1.6
+  rearSideOffset: 0.35
+  handHeight: 0.34
+  handForward: 0.18
+  rearHandForward: 0.3
+  movementSpeed: 0.75
   aimSpeed: 80
+  maximumUpwardAim: 30
   showHUD: 1
   supportSegment: {fileID: 1541434721}
 --- !u!114 &1930979152
@@ -82644,7 +82694,7 @@ PrefabInstance:
     - target: {fileID: 8140320097692848914, guid: 747e40c4eb2d6ff42986665b55cba3c7,
         type: 3}
       propertyPath: m_LocalRotation.w
-      value: -0.00000004371139
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8140320097692848914, guid: 747e40c4eb2d6ff42986665b55cba3c7,
         type: 3}
@@ -82654,7 +82704,7 @@ PrefabInstance:
     - target: {fileID: 8140320097692848914, guid: 747e40c4eb2d6ff42986665b55cba3c7,
         type: 3}
       propertyPath: m_LocalRotation.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8140320097692848914, guid: 747e40c4eb2d6ff42986665b55cba3c7,
         type: 3}

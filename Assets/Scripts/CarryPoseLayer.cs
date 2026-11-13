@@ -64,9 +64,11 @@ namespace HPlayer
         {
             if (!initialized || !animator || !animator.isActiveAndEnabled) return;
 
-            bool holding = interactionController && interactionController.isActiveAndEnabled &&
-                           interactionController.HeldObject != null;
-            bool wantsHose = holding && interactionController.HeldObject is TA.AdaptiveAnimation.CooperativeHoseGrip;
+            bool hasContext = TA.AdaptiveAnimation.AdaptiveAnimationManager.TryRead(interactionController, out var adaptation);
+            var held = hasContext ? adaptation.Context.HeldObject :
+                interactionController ? interactionController.HeldObject : null;
+            bool holding = interactionController && interactionController.isActiveAndEnabled && held != null;
+            bool wantsHose = holding && (hasContext ? adaptation.UsesHosePose : held is TA.AdaptiveAnimation.CooperativeHoseGrip);
             bool pickupFinished = interactionController && !interactionController.IsPickingUp;
 
             // Mulai blend saat Pickup bertransisi keluar agar lengan tidak turun
@@ -78,7 +80,7 @@ namespace HPlayer
                                 animator.GetNextAnimatorStateInfo(0).fullPathHash != PickupStateId;
             }
 
-            bool cooperative = interactionController && interactionController.HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject;
+            bool cooperative = interactionController && held is TA.AdaptiveAnimation.CooperativeCarryObject;
             float targetWeight = holding && !interactionController.IsPlacingDown &&
                 (pickupFinished || leavingPickup || cooperative) ? 1f : 0f;
             if (hoseLayerIndex > 0)

@@ -7,7 +7,7 @@ namespace TA.AdaptiveAnimation
 {
     /// <summary>
     /// Menghubungkan HeldObject ke pasangan target IK yang sudah terpasang.
-    /// Untuk Animator Update Mode Normal. Tidak menggerakkan objek/fisika.
+    /// Untuk Animator Update Mode Normal. Stable carry dapat mengoreksi posisi objek agar grip terjangkau.
     /// </summary>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(200)]
@@ -27,6 +27,7 @@ namespace TA.AdaptiveAnimation
         [Tooltip("Matikan saat mengatur target manual; aktifkan setelah rekam kalibrasi.")]
         [SerializeField] private bool enableGripRotation;
         [SerializeField] private HandGripRotationProfile rotationProfile;
+        [SerializeField] private HandGripRotationProfile[] additionalRotationProfiles = System.Array.Empty<HandGripRotationProfile>();
         [SerializeField] private string rotationStatus = "Rotasi manual";
         private Quaternion savedLeftRotation;
         private Quaternion savedRightRotation;
@@ -83,8 +84,9 @@ namespace TA.AdaptiveAnimation
             if (!ValidateSetup()) return;
             var left = leftArmIK.data;
             var right = rightArmIK.data;
-            Liftable held = interactionController.isActiveAndEnabled
-                ? interactionController.HeldObject : null;
+            bool hasContext = AdaptiveAnimationManager.TryRead(interactionController, out var adaptation);
+            Liftable held = hasContext ? adaptation.Context.HeldObject :
+                interactionController.isActiveAndEnabled ? interactionController.HeldObject : null;
             heldObjectName = held ? held.name : "Tidak ada";
 
             // Saat objek berubah, selesaikan pelepasan pose lama dahulu.
@@ -97,7 +99,7 @@ namespace TA.AdaptiveAnimation
                     return;
                 }
                 trackedObject = held;
-                provider = held ? held.GetComponent<GripPointProvider>() : null;
+                provider = hasContext ? adaptation.GripProvider : held ? held.GetComponent<GripPointProvider>() : null;
                 hasSavedTargets = false;
                 hasSavedRotations = false;
                 acceptedReach = false;
@@ -109,7 +111,8 @@ namespace TA.AdaptiveAnimation
                 return;
             }
             // Mendukung provider yang diaktifkan/dipasang kembali saat uji.
-            if (!provider) provider = held.GetComponent<GripPointProvider>();
+            if (hasContext) provider = adaptation.GripProvider;
+            else if (!provider) provider = held.GetComponent<GripPointProvider>();
             if (!provider || !provider.isActiveAndEnabled)
             {
                 FadeOut("Objek tanpa provider aktif", left, right);
@@ -135,6 +138,19 @@ namespace TA.AdaptiveAnimation
             // Setelah keluar jangkauan, perlu masuk sedikit lebih dekat untuk aktif.
             float activeRatio = acceptedReach ? ratio :
                 Mathf.Max(0.1f, ratio - Mathf.Clamp(reentryMargin, 0f, 0.15f));
+            // Reserve a small margin for this frame's smoothed spine movement.
+            // Stable single carry can reposition the object while preserving real surface contacts.
+            var attachment = held.GetComponent<StableCarryAttachment>();
+            if (attachment && leftLength > .0001f && rightLength > .0001f &&
+                attachment.FitGripReach(leftPoint, rightPoint, left.root.position, right.root.position,
+                    leftLength * activeRatio - .01f, rightLength * activeRatio - .01f) &&
+                provider.TryGetGripPoints(interactionController, out a, out b))
+            {
+                leftPoint = swapHands ? b : a;
+                rightPoint = swapHands ? a : b;
+                leftDistance = Vector3.Distance(left.root.position, leftPoint);
+                rightDistance = Vector3.Distance(right.root.position, rightPoint);
+            }
             if (leftLength < 0.0001f || rightLength < 0.0001f ||
                 leftDistance > leftLength * activeRatio ||
                 rightDistance > rightLength * activeRatio)
@@ -188,7 +204,8 @@ namespace TA.AdaptiveAnimation
                 rotationStatus = "Rotasi manual: target dapat diputar";
                 return;
             }
-            if (!rotationProfile || !rotationProfile.Matches(provider.GripStyleId))
+            var activeProfile = RotationProfileFor(provider.GripStyleId);
+            if (!activeProfile)
             {
                 rotationStatus = "Profil belum dikalibrasi atau gaya pegangan berbeda";
                 return;
@@ -201,8 +218,8 @@ namespace TA.AdaptiveAnimation
                     : "Provider tidak menyediakan orientasi";
                 return;
             }
-            left.target.rotation = (swapHands ? b : a) * rotationProfile.LeftCorrection;
-            right.target.rotation = (swapHands ? a : b) * rotationProfile.RightCorrection;
+            left.target.rotation = (swapHands ? b : a) * activeProfile.LeftCorrection;
+            right.target.rotation = (swapHands ? a : b) * activeProfile.RightCorrection;
             savedLeftRotation = Quaternion.Inverse(playerSpace.rotation) * left.target.rotation;
             savedRightRotation = Quaternion.Inverse(playerSpace.rotation) * right.target.rotation;
             hasSavedRotations = true;
@@ -210,6 +227,14 @@ namespace TA.AdaptiveAnimation
             rotationStatus = activeBox && activeBox.SharedOrientationProfile
                 ? "Mengikuti preset " + activeBox.GripPreset
                 : "Mengikuti orientasi grip objek";
+        }
+
+        private HandGripRotationProfile RotationProfileFor(string style)
+        {
+            if (rotationProfile && rotationProfile.Matches(style)) return rotationProfile;
+            foreach (var profile in additionalRotationProfiles)
+                if (profile && profile.Matches(style)) return profile;
+            return null;
         }
 
         [ContextMenu("Rekam Kalibrasi Rotasi Dari Target")]
@@ -230,7 +255,9 @@ namespace TA.AdaptiveAnimation
                 Debug.LogWarning("Matikan Enable Grip Rotation sebelum mengatur dan merekam target.", this);
                 return;
             }
-            if (!rotationProfile || !provider || !provider.isActiveAndEnabled ||
+            var calibrationProfile = provider ? RotationProfileFor(provider.GripStyleId) : null;
+            if (!calibrationProfile) calibrationProfile = rotationProfile;
+            if (!calibrationProfile || !provider || !provider.isActiveAndEnabled ||
                 !trackedObject || interactionController.HeldObject != trackedObject ||
                 !acceptedReach || currentWeight < 0.999f ||
                 string.IsNullOrEmpty(provider.GripStyleId))
@@ -249,7 +276,7 @@ namespace TA.AdaptiveAnimation
             }
             var box = provider as BoxGripProvider;
             if (recordShared && (!box || !box.SharedOrientationProfile ||
-                !rotationProfile.Matches(provider.GripStyleId)))
+                !calibrationProfile.Matches(provider.GripStyleId)))
             {
                 Debug.LogWarning("Isi Shared Orientation Profile pada objek dan gunakan Rotation Profile karakter yang sudah dikalibrasi pada Medium.", this);
                 return;
@@ -260,11 +287,11 @@ namespace TA.AdaptiveAnimation
                 return;
             }
             Quaternion a = Quaternion.identity, b = Quaternion.identity;
-            if (!recordShared && !provider.TryGetGripRotations(out a, out b)) return;
+            if (!recordShared && !provider.TryGetGripRotations(interactionController, out a, out b)) return;
             // Slot kosong boleh direkam: tidak perlu membaca orientasi slot sebelumnya.
             if (recordShared && !provider.TryGetGripPoints(out Vector3 pointA, out Vector3 pointB)) return;
             UnityEngine.Object saveTarget = recordShared
-                ? (UnityEngine.Object)box.SharedOrientationProfile : rotationProfile;
+                ? (UnityEngine.Object)box.SharedOrientationProfile : calibrationProfile;
 #if UNITY_EDITOR
             if (!UnityEditor.AssetDatabase.Contains(saveTarget))
             {
@@ -275,14 +302,14 @@ namespace TA.AdaptiveAnimation
 #endif
             if (recordShared)
             {
-                Quaternion leftFrame = left.target.rotation * Quaternion.Inverse(rotationProfile.LeftCorrection);
-                Quaternion rightFrame = right.target.rotation * Quaternion.Inverse(rotationProfile.RightCorrection);
+                Quaternion leftFrame = left.target.rotation * Quaternion.Inverse(calibrationProfile.LeftCorrection);
+                Quaternion rightFrame = right.target.rotation * Quaternion.Inverse(calibrationProfile.RightCorrection);
                 if (!box.RecordSharedFrames(swapHands ? rightFrame : leftFrame,
                     swapHands ? leftFrame : rightFrame)) return;
             }
             else
             {
-                rotationProfile.Record(provider.GripStyleId, swapHands ? b : a,
+                calibrationProfile.Record(provider.GripStyleId, swapHands ? b : a,
                     swapHands ? a : b, left.target.rotation, right.target.rotation);
             }
 #if UNITY_EDITOR

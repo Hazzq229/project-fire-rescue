@@ -15,7 +15,7 @@ namespace TA.AdaptiveAnimation
             GUI.Box(new Rect(12, 12, 500, 228), "Adaptive Animation - Two Players");
             GUILayout.BeginArea(new Rect(24, 38, 475, 204));
             GUILayout.Label("Move: P1 WASD | P2 Arrows. Grab / place: F | Right Ctrl");
-            GUILayout.Label("Run (hold): Left Shift | Right Alt. Throw: Q | / (slash)");
+            GUILayout.Label("Dash (press): Left Shift | Right Alt. Throw: Q | / (slash)");
             GUILayout.Label("Heavy crate: walk together; grab again to place together.");
             GUILayout.Label("P1: " + (player1 ? player1.CurrentCarryRole.ToString() : "-") +
                 "     P2: " + (player2 ? player2.CurrentCarryRole.ToString() : "-"));
