@@ -1,18 +1,6 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
-public class Enums : MonoBehaviour
+namespace TA.AdaptiveAnimation
 {
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
+    public enum AdaptiveObjectType { None, Unknown, Box, Cylinder, Survivor, Hose }
+    public enum AdaptiveInteractionType { None, CarryObject, CarrySurvivor, ObjectInteraction, FireHoseInteraction }
+    public enum InteractionPhase { None, Preparing, Carrying, Placing, ObjectInteraction }
 }

@@ -1,0 +1,774 @@
+using System.Collections.Generic;
+using HInteractions;
+using HPlayer;
+using UnityEngine;
+
+namespace TA.AdaptiveAnimation
+{
+    public enum CarryRole { None, Front, Back }
+    public enum CooperativeCarryState { Idle, WaitingForPartner, Aligning, Carrying }
+
+    /// <summary>Opt-in, two-person carry with object-relative roles and one physics owner.</summary>
+    [DefaultExecutionOrder(50)]
+    [RequireComponent(typeof(BoxCollider), typeof(CarryAnimationLoad))]
+    public sealed class CooperativeCarryObject : Liftable
+    {
+        [SerializeField] private CarryWeightSpeedProfile speedProfile;
+        [Tooltip("Distance from the end of the collider to the player's root at closest stance, in metres.")]
+        [SerializeField, Min(.1f)] private float stanceGap = .12f;
+        [Tooltip("Additional backward room (slack distance) each player can step away from the object, in metres.")]
+        [SerializeField, Range(0f, 0.8f)] private float backwardRoom = 0.35f;
+        [SerializeField] private float frontGap;
+        [SerializeField] private float backGap;
+        [SerializeField, Min(.1f)] private float joinDistance = 1.3f;
+        [SerializeField] private float carryHeightAbovePlayer = .399f;
+        [SerializeField] private float gripHeightAboveCenter;
+        private bool dynamicOnRelease;
+        public void ConfigureProp(CarryWeightSpeedProfile profile, float gripHeight)
+        {
+            speedProfile = profile;
+            gripHeightAboveCenter = gripHeight;
+            carryHeightAbovePlayer = .399f - gripHeight;
+            dynamicOnRelease = true;
+        }
+        [SerializeField, Min(.1f)] private float alignmentSpeed = 1.5f;
+        [Header("Solo heavy carry")]
+        [SerializeField, Range(.01f, .3f)] private float soloSpeedMultiplier = .12f;
+        [SerializeField, Range(0f, 35f)] private float maximumSoloTilt = 25f;
+        [SerializeField, Min(1f)] private float levelingDegreesPerSecond = 40f;
+        [SerializeField] private CooperativeCarryState state;
+        [SerializeField] private InteractionController frontHolder;
+        [SerializeField] private InteractionController backHolder;
+        [SerializeField] private Vector3 groupVelocity;
+        [SerializeField] private Vector3 frontVelocity;
+        [SerializeField] private Vector3 backVelocity;
+
+        [Header("Cooperative Rotation Settings")]
+        [SerializeField, Min(10f)] private float turnSpeed = 90f;
+        private float currentYaw;
+
+        private BoxCollider shape;
+        private bool savedKinematic, savedGravity, releasing;
+        private RigidbodyInterpolation savedInterpolation;
+        private CollisionDetectionMode savedCollisionMode;
+        private RigidbodyConstraints savedConstraints;
+        private Quaternion levelRotation;
+        private Vector3 soloPivot;
+        private CarryRole firstRole;
+        private Vector3 frontEffort, backEffort;
+        private readonly List<(Collider a, Collider b)> ignoredCollisions = new();
+        private CarryMotionGuard motionGuard;
+        private InteractionController sampledFront, sampledBack;
+        private Vector3 previousFront, previousBack, previousObject;
+        private bool sampledObject;
+        private float motionStartFrontGap, motionStartBackGap;
+        private Rigidbody[] motionBodies;
+
+        private void SampleMotion()
+        {
+            float dt = Time.fixedDeltaTime;
+            groupVelocity = sampledObject && Holders.Count > 0 ? (Rigidbody.position - previousObject) / dt : Vector3.zero;
+            previousObject = Rigidbody.position; sampledObject = Holders.Count > 0;
+            frontVelocity = frontHolder && sampledFront == frontHolder ?
+                (frontHolder.GetComponent<Rigidbody>().position - previousFront) / dt : Vector3.zero;
+            backVelocity = backHolder && sampledBack == backHolder ?
+                (backHolder.GetComponent<Rigidbody>().position - previousBack) / dt : Vector3.zero;
+            sampledFront = frontHolder; sampledBack = backHolder;
+            if (frontHolder) previousFront = frontHolder.GetComponent<Rigidbody>().position;
+            if (backHolder) previousBack = backHolder.GetComponent<Rigidbody>().position;
+        }
+
+        private void EnsureMotionGuard()
+        {
+            if (motionGuard != null) return;
+            var bodies = new List<Rigidbody> { Rigidbody };
+            if (frontHolder) bodies.Add(frontHolder.GetComponent<Rigidbody>());
+            if (backHolder) bodies.Add(backHolder.GetComponent<Rigidbody>());
+            motionBodies = bodies.ToArray();
+            motionGuard = new CarryMotionGuard(motionBodies);
+        }
+
+        private float MoveObjectPose(Vector3 position, Quaternion rotation)
+        {
+            EnsureMotionGuard();
+            var positions = new Vector3[motionBodies.Length];
+            var rotations = new Quaternion[motionBodies.Length];
+            for (int i = 0; i < motionBodies.Length; i++)
+            { positions[i] = motionBodies[i].position; rotations[i] = motionBodies[i].rotation; }
+            positions[0] = position; rotations[0] = rotation;
+            float fraction = motionGuard.Limit(positions, rotations);
+            Rigidbody.MovePosition(Vector3.Lerp(Rigidbody.position, position, fraction));
+            Rigidbody.MoveRotation(Quaternion.Slerp(Rigidbody.rotation, rotation, fraction));
+            return fraction;
+        }
+
+        private void MoveFormation(Vector3 objectPosition, Quaternion objectRotation, Vector3 frontPosition, Vector3 backPosition)
+        {
+            EnsureMotionGuard();
+            Quaternion startingRotation = Rigidbody.rotation;
+            var fr = frontHolder.GetComponent<Rigidbody>(); var br = backHolder.GetComponent<Rigidbody>();
+            var positions = new[] { objectPosition, frontPosition, backPosition };
+            var rotations = new[] { objectRotation,
+                Quaternion.RotateTowards(fr.rotation, objectRotation * Quaternion.Euler(0f, 180f, 0f), 360f * Time.fixedDeltaTime),
+                Quaternion.RotateTowards(br.rotation, objectRotation, 360f * Time.fixedDeltaTime) };
+            float fraction = motionGuard.Limit(positions, rotations);
+            // A large formation's tips must not orbit faster than the operators'
+            // loaded walking speed, even when a turn key requests a fast yaw.
+            float frontTravel = Vector3.Distance(fr.position, frontPosition);
+            float backTravel = Vector3.Distance(br.position, backPosition);
+            if (frontTravel > .000001f) fraction = Mathf.Min(fraction,
+                frontHolder.GetComponent<ThirdPersonPlayerController>().BaseMoveSpeed * (1f - SpeedPenalty) * Time.fixedDeltaTime / frontTravel);
+            if (backTravel > .000001f) fraction = Mathf.Min(fraction,
+                backHolder.GetComponent<ThirdPersonPlayerController>().BaseMoveSpeed * (1f - SpeedPenalty) * Time.fixedDeltaTime / backTravel);
+            for (int i = 0; i < motionBodies.Length; i++)
+            {
+                motionBodies[i].MovePosition(Vector3.Lerp(motionBodies[i].position, positions[i], fraction));
+                motionBodies[i].MoveRotation(Quaternion.Slerp(motionBodies[i].rotation, rotations[i], fraction));
+            }
+            levelRotation = Quaternion.Slerp(startingRotation, objectRotation, fraction);
+            currentYaw = levelRotation.eulerAngles.y;
+            frontGap = Mathf.Lerp(motionStartFrontGap, frontGap, fraction);
+            backGap = Mathf.Lerp(motionStartBackGap, backGap, fraction);
+        }
+
+        public CooperativeCarryState State => state;
+        public Vector3 GroupVelocity => groupVelocity;
+        public Vector3 FrontVelocity => frontVelocity;
+        public Vector3 BackVelocity => backVelocity;
+        public Vector3 GetPlayerVelocity(InteractionController player) =>
+            player == frontHolder ? frontVelocity :
+            player == backHolder ? backVelocity : groupVelocity;
+        public float LoadPerPlayerKg => Holders.Count == 0 ? 0f :
+            GetComponent<CarryAnimationLoad>().WeightKg / Holders.Count;
+        public bool HasConflictingInput => frontEffort.sqrMagnitude > .001f || backEffort.sqrMagnitude > .001f;
+
+        public void ResumeAfterPlacement()
+        {
+            if (Holders.Count == 0) return;
+            foreach (var holder in Holders)
+                if (holder is InteractionController actor && actor.IsPlacingDown) return;
+            state = Holders.Count == 2 ? CooperativeCarryState.Aligning : CooperativeCarryState.WaitingForPartner;
+            if (Holders.Count == 1) BeginSoloTilt();
+        }
+        public Vector3 GetEffortDirection(InteractionController player) =>
+            player == frontHolder ? frontEffort : player == backHolder ? backEffort : Vector3.zero;
+        public override bool ForceFaceObject => true;
+        public override float SpeedPenalty
+        {
+            get
+            {
+                float multiplier = 1f;
+                if (speedProfile) speedProfile.TryEvaluateMultiplier(LoadPerPlayerKg, out multiplier);
+                if (Holders.Count == 1) multiplier *= soloSpeedMultiplier;
+                return 1f - multiplier;
+            }
+        }
+
+        protected override void Awake()
+        {
+            base.Awake();
+            maxHolders = 2;
+            shape = GetComponent<BoxCollider>();
+            state = CooperativeCarryState.Idle;
+            frontGap = stanceGap;
+            backGap = stanceGap;
+        }
+
+        public CarryRole GetRole(InteractionController player) => !player ? CarryRole.None :
+            player == frontHolder ? CarryRole.Front : player == backHolder ? CarryRole.Back : CarryRole.None;
+
+        public CarryRole RoleAt(Vector3 position)
+        {
+            var box = shape ? shape : GetComponent<BoxCollider>();
+            Vector3 center = PhysicsPoint(box.center);
+            Vector3 forward = Rigidbody ? Rigidbody.rotation * Vector3.forward : transform.forward;
+            return Vector3.Dot(position - center, forward) >= 0f ? CarryRole.Front : CarryRole.Back;
+        }
+
+        private Vector3 PhysicsPoint(Vector3 local) => Rigidbody ? Rigidbody.position +
+            Rigidbody.rotation * Vector3.Scale(local, transform.lossyScale) : transform.TransformPoint(local);
+
+        public Vector3 GetStance(CarryRole role, float playerY)
+        {
+            var box = shape ? shape : GetComponent<BoxCollider>();
+            float sign = role == CarryRole.Front ? 1f : -1f;
+            float gap = (role == CarryRole.Front) ? frontGap : backGap;
+            gap = Mathf.Clamp(gap, stanceGap, stanceGap + backwardRoom);
+            Vector3 fwd = Rigidbody ? Rigidbody.rotation * Vector3.forward : transform.forward;
+            Vector3 point = PhysicsPoint(box.center + Vector3.forward * sign * box.size.z * .5f)
+                + fwd * sign * gap;
+            point.y = playerY;
+            return point;
+        }
+
+        public bool CanJoin(InteractionController player)
+        {
+            if (!player || !isActiveAndEnabled || player.HeldObject || Holders.Count >= 2) return false;
+            Vector3 position = player.GetComponent<Rigidbody>().position;
+            CarryRole role = RoleAt(position);
+            if (role == CarryRole.Front ? frontHolder : backHolder) return false;
+            return Vector3.Distance(position, GetStance(role, position.y)) <= joinDistance;
+        }
+
+        public override Vector3 GetGrabPoint(Vector3 handPosition) =>
+            GetComponent<BoxCollider>().ClosestPoint(handPosition);
+
+        public override void PickUp(IObjectHolder holder, int layer)
+        {
+            var player = holder as InteractionController;
+            if (!CanJoin(player)) return;
+            var role = RoleAt(player.GetComponent<Rigidbody>().position);
+            if (role == CarryRole.Front) frontHolder = player; else backHolder = player;
+            // Keep the interaction layer: the second player's trigger must still detect this object.
+            base.PickUp(holder, gameObject.layer);
+            player.GetComponent<ThirdPersonPlayerController>().CooperativeCarry = this;
+            var rb = player.GetComponent<Rigidbody>();
+            rb.velocity = Vector3.zero;
+            foreach (var a in GetComponentsInChildren<Collider>())
+                foreach (var b in player.GetComponentsInChildren<Collider>())
+                    if (!a.isTrigger && !b.isTrigger && !Physics.GetIgnoreCollision(a, b))
+                    {
+                        Physics.IgnoreCollision(a, b, true);
+                        ignoredCollisions.Add((a, b));
+                    }
+        }
+
+        protected override void OnFirstPickup()
+        {
+            savedKinematic = Rigidbody.isKinematic;
+            savedGravity = Rigidbody.useGravity;
+            savedInterpolation = Rigidbody.interpolation;
+            savedCollisionMode = Rigidbody.collisionDetectionMode;
+            savedConstraints = Rigidbody.constraints;
+
+            currentYaw = Rigidbody.rotation.eulerAngles.y;
+            levelRotation = Quaternion.Euler(0f, currentYaw, 0f);
+
+            frontGap = stanceGap;
+            backGap = stanceGap;
+            firstRole = frontHolder ? CarryRole.Front : CarryRole.Back;
+            if (!Rigidbody.isKinematic) { Rigidbody.velocity = Vector3.zero; Rigidbody.angularVelocity = Vector3.zero; }
+            Rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
+            Rigidbody.isKinematic = true;
+            Rigidbody.useGravity = false;
+            Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+            Rigidbody.constraints = RigidbodyConstraints.None;
+            BeginSoloTilt();
+        }
+
+        private Vector3 EndLocal(CarryRole role) => shape.center + Vector3.up * gripHeightAboveCenter + Vector3.forward *
+            (role == CarryRole.Front ? 1f : -1f) * shape.size.z * .5f;
+
+        private void BeginSoloTilt()
+        {
+            var player = frontHolder ? frontHolder : backHolder;
+            float sign = firstRole == CarryRole.Front ? 1f : -1f;
+            Vector3 localPivot = shape.center + new Vector3(0f, -shape.size.y * .5f, -sign * shape.size.z * .5f);
+            soloPivot = PhysicsPoint(localPivot);
+            // The unheld bottom edge stays on its support plane while the held end rises to hand height.
+            soloPivot.y = shape.bounds.min.y;
+            float length = shape.size.z * transform.lossyScale.z;
+            float halfHeight = (shape.size.y * .5f + gripHeightAboveCenter) * transform.lossyScale.y;
+            float rise = player.GetComponent<Rigidbody>().position.y + carryHeightAbovePlayer + gripHeightAboveCenter - soloPivot.y;
+            float radius = Mathf.Sqrt(length * length + halfHeight * halfHeight);
+            float angle = (Mathf.Asin(Mathf.Clamp(rise / Mathf.Max(.001f, radius), -1f, 1f)) -
+                Mathf.Atan2(halfHeight, length)) * Mathf.Rad2Deg;
+            Quaternion tilt = levelRotation * Quaternion.Euler(-sign * Mathf.Clamp(angle, 0f, maximumSoloTilt), 0f, 0f);
+            SetObjectPoseAroundPivot(soloPivot, localPivot, tilt);
+        }
+
+        protected override void OnAnyPickup()
+        {
+            motionGuard = null;
+            frontGap = stanceGap;
+            backGap = stanceGap;
+            state = Holders.Count == 2 ? CooperativeCarryState.Aligning : CooperativeCarryState.WaitingForPartner;
+            if (Holders.Count != 2) return;
+            // Attach at the second grab event, not after the rest of the pickup clip.
+            Vector3 end = PhysicsPoint(EndLocal(firstRole));
+            Vector3 position = end - levelRotation * Vector3.Scale(EndLocal(firstRole), transform.lossyScale);
+            position.y = (frontHolder.GetComponent<Rigidbody>().position.y +
+                backHolder.GetComponent<Rigidbody>().position.y) * .5f + carryHeightAbovePlayer;
+            SetObjectPose(position, levelRotation);
+        }
+
+        private void SetObjectPoseAroundPivot(Vector3 pivot, Vector3 localPivot, Quaternion rotation)
+        {
+            // Follow the supported edge's arc. A straight chord between the two
+            // root positions can dip the lower edge into the floor mid-lift.
+            Quaternion start = Rigidbody.rotation;
+            int steps = Mathf.Max(1, Mathf.CeilToInt(Quaternion.Angle(start, rotation)));
+            for (int step = 1; step <= steps; step++)
+            {
+                Quaternion next = Quaternion.Slerp(start, rotation, (float)step / steps);
+                Vector3 position = pivot - next * Vector3.Scale(localPivot, transform.lossyScale);
+                if (SetObjectPose(position, next) < .999f) break;
+            }
+        }
+
+        private float SetObjectPose(Vector3 position, Quaternion rotation)
+        {
+            EnsureMotionGuard();
+            var positions = new Vector3[motionBodies.Length]; var rotations = new Quaternion[motionBodies.Length];
+            for (int i = 0; i < motionBodies.Length; i++)
+            { positions[i] = motionBodies[i].position; rotations[i] = motionBodies[i].rotation; }
+            positions[0] = position; rotations[0] = rotation;
+            float fraction = motionGuard.Limit(positions, rotations);
+            Rigidbody.position = Vector3.Lerp(Rigidbody.position, position, fraction);
+            Rigidbody.rotation = Quaternion.Slerp(Rigidbody.rotation, rotation, fraction);
+            return fraction;
+        }
+
+        public override void Drop(IObjectHolder holder)
+        {
+            if (!Holders.Contains(holder)) return;
+            var player = holder as InteractionController;
+            if (player)
+            {
+                player.GetComponent<ThirdPersonPlayerController>().CooperativeCarry = null;
+                player.GetComponent<Rigidbody>().velocity = Vector3.zero;
+            }
+            if (player == frontHolder) frontHolder = null;
+            if (player == backHolder) backHolder = null;
+            base.Drop(holder);
+            if (releasing) return;
+            // A release by either person puts the object down for both; no abandoned joint/role.
+            releasing = true;
+            try
+            {
+                var remaining = Holders.ToArray();
+                foreach (var other in remaining)
+                    if (other is InteractionController partner && partner) partner.ReleaseHeldObject();
+            }
+            finally { releasing = false; }
+        }
+
+        protected override void OnAllDropped()
+        {
+            foreach (var pair in ignoredCollisions)
+                if (pair.a && pair.b) Physics.IgnoreCollision(pair.a, pair.b, false);
+            ignoredCollisions.Clear();
+            Rigidbody.isKinematic = dynamicOnRelease ? false : savedKinematic;
+            Rigidbody.useGravity = dynamicOnRelease || savedGravity;
+            Rigidbody.interpolation = savedInterpolation;
+            Rigidbody.collisionDetectionMode = savedCollisionMode;
+            // Level only as far as the surroundings permit; release must not undo
+            // the collision protection of a tilted solo carry beside a wall.
+            var releaseGuard = new CarryMotionGuard(Rigidbody);
+            float levelFraction = releaseGuard.Limit(new[] { Rigidbody.position }, new[] { levelRotation });
+            Rigidbody.rotation = Quaternion.Slerp(Rigidbody.rotation, levelRotation, levelFraction);
+            Rigidbody.constraints = savedConstraints;
+            state = CooperativeCarryState.Idle;
+            frontGap = stanceGap;
+            backGap = stanceGap;
+            groupVelocity = Vector3.zero;
+            frontVelocity = Vector3.zero;
+            backVelocity = Vector3.zero;
+            frontEffort = backEffort = Vector3.zero;
+        }
+
+        public static Vector2 CombineInput(Vector2 front, Vector2 back)
+        {
+            front = Vector2.ClampMagnitude(front, 1f);
+            back = Vector2.ClampMagnitude(back, 1f);
+            if (front.sqrMagnitude < .001f || back.sqrMagnitude < .001f || Vector2.Dot(front, back) <= 0f)
+                return Vector2.zero;
+            return (front + back) * .5f;
+        }
+
+        private void FixedUpdate()
+        {
+            SampleMotion();
+            frontEffort = backEffort = Vector3.zero;
+            if (Holders.Count == 0) return;
+            foreach (var holder in Holders)
+                if (holder is InteractionController placing && placing.IsPlacingDown) return;
+            if (state != CooperativeCarryState.Carrying && frontHolder) Align(frontHolder, CarryRole.Front);
+            if (state != CooperativeCarryState.Carrying && backHolder) Align(backHolder, CarryRole.Back);
+            if (!frontHolder || !backHolder)
+            {
+                var solo = frontHolder ? frontHolder : backHolder;
+                if (solo && !solo.IsPickingUp)
+                    MoveSolo(solo.GetComponent<ThirdPersonPlayerController>().RequestedMove);
+                return;
+            }
+            var front = frontHolder.GetComponent<ThirdPersonPlayerController>();
+            var back = backHolder.GetComponent<ThirdPersonPlayerController>();
+            var fr = frontHolder.GetComponent<Rigidbody>();
+            var br = backHolder.GetComponent<Rigidbody>();
+            if (frontHolder.IsPickingUp || backHolder.IsPickingUp) return;
+            if (Quaternion.Angle(Rigidbody.rotation, levelRotation) > .1f)
+            {
+                // Pivot about the already held end, keeping that hand contact while the other end rises.
+                Vector3 end = PhysicsPoint(EndLocal(firstRole));
+                Quaternion next = Quaternion.RotateTowards(Rigidbody.rotation, levelRotation,
+                    levelingDegreesPerSecond * Time.fixedDeltaTime);
+                Vector3 position = end - next * Vector3.Scale(EndLocal(firstRole), transform.lossyScale);
+                MoveObjectPose(position, next);
+                return;
+            }
+            if (state != CooperativeCarryState.Carrying)
+            {
+                if (Vector3.Distance(fr.position, GetStance(CarryRole.Front, fr.position.y)) > .03f ||
+                    Vector3.Distance(br.position, GetStance(CarryRole.Back, br.position.y)) > .03f) return;
+                float targetY = (fr.position.y + br.position.y) * .5f + carryHeightAbovePlayer;
+                if (Mathf.Abs(Rigidbody.position.y - targetY) > .005f)
+                {
+                    var lift = Vector3.up * (Mathf.MoveTowards(Rigidbody.position.y, targetY,
+                        alignmentSpeed * Time.fixedDeltaTime) - Rigidbody.position.y);
+                    Rigidbody.MovePosition(Rigidbody.position + SafeDelta(Rigidbody, lift));
+                    return;
+                }
+                state = CooperativeCarryState.Carrying;
+            }
+            MoveTogether(front.RequestedMove, back.RequestedMove);
+        }
+
+        private void MoveTogether(Vector2 frontInput, Vector2 backInput)
+        {
+            if (state != CooperativeCarryState.Carrying || !frontHolder || !backHolder) return;
+            motionStartFrontGap = frontGap;
+            motionStartBackGap = backGap;
+
+            var frontLocalInput = frontHolder.GetComponent<LocalPlayerInput>();
+            var backLocalInput = backHolder.GetComponent<LocalPlayerInput>();
+
+            float totalTurnInput = 0f;
+            if (frontLocalInput) totalTurnInput += frontLocalInput.HoseAim.x;
+            if (backLocalInput) totalTurnInput += backLocalInput.HoseAim.x;
+            totalTurnInput = Mathf.Clamp(totalTurnInput, -1f, 1f);
+
+            var front = frontHolder.GetComponent<ThirdPersonPlayerController>();
+            var back = backHolder.GetComponent<ThirdPersonPlayerController>();
+            var fr = frontHolder.GetComponent<Rigidbody>();
+            var br = backHolder.GetComponent<Rigidbody>();
+
+            float frontSpeed = front.BaseMoveSpeed * (1f - SpeedPenalty);
+            float backSpeed = back.BaseMoveSpeed * (1f - SpeedPenalty);
+
+            Vector3 vFrontInput = new Vector3(frontInput.x, 0f, frontInput.y);
+            Vector3 vBackInput = new Vector3(backInput.x, 0f, backInput.y);
+            vFrontInput = Vector3.ClampMagnitude(vFrontInput, 1f);
+            vBackInput = Vector3.ClampMagnitude(vBackInput, 1f);
+
+            const float inputThreshold = 0.05f;
+            bool frontActive = vFrontInput.magnitude > inputThreshold;
+            bool backActive = vBackInput.magnitude > inputThreshold;
+
+            var box = shape ? shape : GetComponent<BoxCollider>();
+            float boxDepth = box.size.z * transform.lossyScale.z;
+            float halfBoxDepth = boxDepth * 0.5f;
+
+            frontGap = Mathf.Clamp(frontGap, stanceGap, stanceGap + backwardRoom);
+            backGap = Mathf.Clamp(backGap, stanceGap, stanceGap + backwardRoom);
+            float totalSpan = boxDepth + frontGap + backGap;
+
+            // Case 1: Neither player is active (Both Idle)
+            if (!frontActive && !backActive)
+            {
+                UpdateEffort(frontInput, backInput);
+
+                if (Mathf.Abs(totalTurnInput) > 0.01f)
+                {
+                    float dYawIdle = totalTurnInput * turnSpeed * Time.fixedDeltaTime;
+                    currentYaw = Mathf.Repeat(currentYaw + dYawIdle, 360f);
+                    levelRotation = Quaternion.Euler(0f, currentYaw, 0f);
+                    Vector3 targetFront = Rigidbody.position + levelRotation *
+                        (box.center + Vector3.forward * (halfBoxDepth + frontGap));
+                    Vector3 targetBack = Rigidbody.position + levelRotation *
+                        (box.center - Vector3.forward * (halfBoxDepth + backGap));
+                    targetFront.y = fr.position.y; targetBack.y = br.position.y;
+                    MoveFormation(Rigidbody.position, levelRotation, targetFront, targetBack);
+                }
+                else
+                    MoveFormation(Rigidbody.position, levelRotation, fr.position, br.position);
+
+                return;
+            }
+
+            // Case 2: Back is Anchor (Back idle, Front moving -> Front orbits around Back & adjusts backward room)
+            if (!backActive && frontActive)
+            {
+                Vector3 anchorPos = br.position;
+                Vector3 currentDir = fr.position - anchorPos;
+                currentDir.y = 0f;
+                if (currentDir.sqrMagnitude < 0.001f) currentDir = levelRotation * Vector3.forward;
+                currentDir.Normalize();
+
+                Vector3 tangentNormal = Vector3.Cross(Vector3.up, currentDir);
+                Vector3 desiredV = vFrontInput * frontSpeed;
+                float tangentialSpeed = Vector3.Dot(desiredV, tangentNormal);
+                tangentialSpeed += totalTurnInput * (turnSpeed * Mathf.Deg2Rad * totalSpan);
+
+                // Radial movement relative to anchor (points away from anchor towards Front):
+                // radialSpeed > 0 means stepping backward away from crate (increasing frontGap).
+                // radialSpeed < 0 means stepping forward towards crate (decreasing frontGap down to stanceGap, cannot step closer than stanceGap).
+                float radialSpeed = Vector3.Dot(desiredV, currentDir);
+                float desiredGapDelta = radialSpeed * Time.fixedDeltaTime;
+                float prevFrontGap = frontGap;
+                float targetFrontGap = Mathf.Clamp(frontGap + desiredGapDelta, stanceGap, stanceGap + backwardRoom);
+
+                float angleDeltaRad = (tangentialSpeed / totalSpan) * Time.fixedDeltaTime;
+                float angleDeltaDeg = angleDeltaRad * Mathf.Rad2Deg;
+
+                Vector3 newDir = Quaternion.Euler(0f, angleDeltaDeg, 0f) * currentDir;
+                float distAnchorToCrate = halfBoxDepth + backGap;
+                float newDistAnchorToFront = distAnchorToCrate + halfBoxDepth + targetFrontGap;
+
+                Vector3 targetFrontPos = anchorPos + newDir * newDistAnchorToFront;
+                targetFrontPos.y = fr.position.y;
+                Vector3 targetCratePos = anchorPos + newDir * distAnchorToCrate;
+                targetCratePos.y = Rigidbody.position.y;
+
+                Vector3 deltaFront = targetFrontPos - fr.position;
+                Vector3 deltaCrate = targetCratePos - Rigidbody.position;
+                Vector3 safeDeltaFront = SafeDelta(fr, deltaFront);
+                Vector3 safeDeltaCrate = SafeDelta(Rigidbody, deltaCrate);
+
+                float distFront = deltaFront.magnitude;
+                float distCrate = deltaCrate.magnitude;
+                float ratioFront = distFront > 0.0001f ? (safeDeltaFront.magnitude / distFront) : 1f;
+                float ratioCrate = distCrate > 0.0001f ? (safeDeltaCrate.magnitude / distCrate) : 1f;
+                float allowedRatio = Mathf.Min(ratioFront, ratioCrate);
+
+                if (allowedRatio < 0.999f)
+                {
+                    angleDeltaDeg *= allowedRatio;
+                    newDir = Quaternion.Euler(0f, angleDeltaDeg, 0f) * currentDir;
+                    targetFrontGap = Mathf.Clamp(prevFrontGap + (targetFrontGap - prevFrontGap) * allowedRatio, stanceGap, stanceGap + backwardRoom);
+                    newDistAnchorToFront = distAnchorToCrate + halfBoxDepth + targetFrontGap;
+                    targetFrontPos = anchorPos + newDir * newDistAnchorToFront;
+                    targetFrontPos.y = fr.position.y;
+                    targetCratePos = anchorPos + newDir * distAnchorToCrate;
+                    targetCratePos.y = Rigidbody.position.y;
+                }
+
+                frontGap = targetFrontGap;
+
+                Quaternion targetRot = Quaternion.LookRotation(newDir, Vector3.up);
+                currentYaw = targetRot.eulerAngles.y;
+                levelRotation = targetRot;
+
+                MoveFormation(targetCratePos, levelRotation, targetFrontPos, anchorPos);
+
+                Vector3 radialEffort = Vector3.Project(vFrontInput, currentDir);
+                if (targetFrontGap >= stanceGap + backwardRoom - 0.001f && radialSpeed > 0.05f)
+                {
+                    frontEffort = radialEffort;
+                    backEffort = -radialEffort;
+                }
+                else
+                {
+                    frontEffort = Vector3.zero;
+                    backEffort = Vector3.zero;
+                }
+
+                return;
+            }
+
+            // Case 3: Front is Anchor (Front idle, Back moving -> Back orbits around Front & adjusts backward room)
+            if (!frontActive && backActive)
+            {
+                Vector3 anchorPos = fr.position;
+                Vector3 currentDir = br.position - anchorPos;
+                currentDir.y = 0f;
+                if (currentDir.sqrMagnitude < 0.001f) currentDir = -(levelRotation * Vector3.forward);
+                currentDir.Normalize();
+
+                Vector3 tangentNormal = Vector3.Cross(Vector3.up, currentDir);
+                Vector3 desiredV = vBackInput * backSpeed;
+                float tangentialSpeed = Vector3.Dot(desiredV, tangentNormal);
+                tangentialSpeed += totalTurnInput * (turnSpeed * Mathf.Deg2Rad * totalSpan);
+
+                // Radial movement relative to anchor (points away from anchor towards Back):
+                // radialSpeed > 0 means stepping backward away from crate (increasing backGap).
+                // radialSpeed < 0 means stepping forward towards crate (decreasing backGap down to stanceGap, cannot step closer than stanceGap).
+                float radialSpeed = Vector3.Dot(desiredV, currentDir);
+                float desiredGapDelta = radialSpeed * Time.fixedDeltaTime;
+                float prevBackGap = backGap;
+                float targetBackGap = Mathf.Clamp(backGap + desiredGapDelta, stanceGap, stanceGap + backwardRoom);
+
+                float angleDeltaRad = (tangentialSpeed / totalSpan) * Time.fixedDeltaTime;
+                float angleDeltaDeg = angleDeltaRad * Mathf.Rad2Deg;
+
+                Vector3 newDirFromFront = Quaternion.Euler(0f, angleDeltaDeg, 0f) * currentDir;
+                Vector3 newForward = -newDirFromFront;
+
+                float distAnchorToCrate = halfBoxDepth + frontGap;
+                float newDistAnchorToBack = distAnchorToCrate + halfBoxDepth + targetBackGap;
+
+                Vector3 targetBackPos = anchorPos + newDirFromFront * newDistAnchorToBack;
+                targetBackPos.y = br.position.y;
+                Vector3 targetCratePos = anchorPos + newDirFromFront * distAnchorToCrate;
+                targetCratePos.y = Rigidbody.position.y;
+
+                Vector3 deltaBack = targetBackPos - br.position;
+                Vector3 deltaCrate = targetCratePos - Rigidbody.position;
+                Vector3 safeDeltaBack = SafeDelta(br, deltaBack);
+                Vector3 safeDeltaCrate = SafeDelta(Rigidbody, deltaCrate);
+
+                float distBack = deltaBack.magnitude;
+                float distCrate = deltaCrate.magnitude;
+                float ratioBack = distBack > 0.0001f ? (safeDeltaBack.magnitude / distBack) : 1f;
+                float ratioCrate = distCrate > 0.0001f ? (safeDeltaCrate.magnitude / distCrate) : 1f;
+                float allowedRatio = Mathf.Min(ratioBack, ratioCrate);
+
+                if (allowedRatio < 0.999f)
+                {
+                    angleDeltaDeg *= allowedRatio;
+                    newDirFromFront = Quaternion.Euler(0f, angleDeltaDeg, 0f) * currentDir;
+                    newForward = -newDirFromFront;
+                    targetBackGap = Mathf.Clamp(prevBackGap + (targetBackGap - prevBackGap) * allowedRatio, stanceGap, stanceGap + backwardRoom);
+                    newDistAnchorToBack = distAnchorToCrate + halfBoxDepth + targetBackGap;
+                    targetBackPos = anchorPos + newDirFromFront * newDistAnchorToBack;
+                    targetBackPos.y = br.position.y;
+                    targetCratePos = anchorPos + newDirFromFront * distAnchorToCrate;
+                    targetCratePos.y = Rigidbody.position.y;
+                }
+
+                backGap = targetBackGap;
+
+                Quaternion targetRot = Quaternion.LookRotation(newForward, Vector3.up);
+                currentYaw = targetRot.eulerAngles.y;
+                levelRotation = targetRot;
+
+                MoveFormation(targetCratePos, levelRotation, anchorPos, targetBackPos);
+
+                Vector3 radialEffort = Vector3.Project(vBackInput, currentDir);
+                if (targetBackGap >= stanceGap + backwardRoom - 0.001f && radialSpeed > 0.05f)
+                {
+                    backEffort = radialEffort;
+                    frontEffort = -radialEffort;
+                }
+                else
+                {
+                    backEffort = Vector3.zero;
+                    frontEffort = Vector3.zero;
+                }
+
+                return;
+            }
+
+            // Case 4: Both Players Active (Translation + Differential Steering + Backward Room Adjustments)
+            {
+                Vector3 desiredVFront = vFrontInput * frontSpeed;
+                Vector3 desiredVBack = vBackInput * backSpeed;
+
+                Vector3 fwd = levelRotation * Vector3.forward;
+                Vector3 right = levelRotation * Vector3.right;
+
+                float frontLong = Vector3.Dot(desiredVFront, fwd);
+                float backLong = Vector3.Dot(desiredVBack, fwd);
+                float frontLat = Vector3.Dot(desiredVFront, right);
+                float backLat = Vector3.Dot(desiredVBack, right);
+
+                // Group translation is average along longitudinal and lateral axes
+                float transLong = (frontLong + backLong) * 0.5f;
+                float transLat = (frontLat + backLat) * 0.5f;
+                Vector3 transV = fwd * transLong + right * transLat;
+
+                // Relative longitudinal movement allows adjusting gaps (backward room)
+                // Front relative to crate: frontLong - transLong. Positive = moving away from crate.
+                float frontRelV = frontLong - transLong;
+                frontGap = Mathf.Clamp(frontGap + frontRelV * Time.fixedDeltaTime, stanceGap, stanceGap + backwardRoom);
+
+                // Back relative to crate: backLong - transLong. Negative = moving away from crate.
+                float backRelV = -(backLong - transLong);
+                backGap = Mathf.Clamp(backGap + backRelV * Time.fixedDeltaTime, stanceGap, stanceGap + backwardRoom);
+
+                // Rotation from differential lateral movement
+                float relLat = frontLat - backLat;
+                float rotSpeedFromPlayers = (relLat / totalSpan) * Mathf.Rad2Deg;
+                float totalRotSpeed = rotSpeedFromPlayers + totalTurnInput * turnSpeed;
+                float dYaw = totalRotSpeed * Time.fixedDeltaTime;
+
+                currentYaw = Mathf.Repeat(currentYaw + dYaw, 360f);
+                levelRotation = Quaternion.Euler(0f, currentYaw, 0f);
+
+                Vector3 deltaPos = transV * Time.fixedDeltaTime;
+                deltaPos = SafeDelta(Rigidbody, deltaPos);
+                deltaPos = SafeDelta(fr, deltaPos);
+                deltaPos = SafeDelta(br, deltaPos);
+
+                Vector3 nextCratePos = Rigidbody.position + deltaPos;
+                Vector3 nextFwd = levelRotation * Vector3.forward;
+
+                float distCrateToFront = halfBoxDepth + frontGap;
+                float distCrateToBack = halfBoxDepth + backGap;
+
+                Vector3 targetFrontPos = nextCratePos + nextFwd * distCrateToFront;
+                targetFrontPos.y = fr.position.y;
+                Vector3 targetBackPos = nextCratePos - nextFwd * distCrateToBack;
+                targetBackPos.y = br.position.y;
+
+                MoveFormation(nextCratePos, levelRotation, targetFrontPos, targetBackPos);
+
+                UpdateEffort(frontInput, backInput);
+
+            }
+        }
+
+        private void UpdateEffort(Vector2 frontInput, Vector2 backInput)
+        {
+            bool blocked = CombineInput(frontInput, backInput).sqrMagnitude < .001f;
+            frontInput = Vector2.ClampMagnitude(frontInput, 1f);
+            backInput = Vector2.ClampMagnitude(backInput, 1f);
+            frontEffort = blocked ? new Vector3(frontInput.x, 0f, frontInput.y) : Vector3.zero;
+            backEffort = blocked ? new Vector3(backInput.x, 0f, backInput.y) : Vector3.zero;
+        }
+
+        private void MoveSolo(Vector2 input)
+        {
+            if (Holders.Count != 1) return;
+            var player = frontHolder ? frontHolder : backHolder;
+            var rb = player.GetComponent<Rigidbody>();
+            if (Vector3.Distance(rb.position, GetStance(GetRole(player), rb.position.y)) > .03f) return;
+            input = Vector2.ClampMagnitude(input, 1f);
+            float speed = player.GetComponent<ThirdPersonPlayerController>().BaseMoveSpeed * (1f - SpeedPenalty);
+            Vector3 delta = new Vector3(input.x, 0f, input.y) * speed * Time.fixedDeltaTime;
+            delta = SafeDelta(rb, SafeDelta(Rigidbody, delta));
+            EnsureMotionGuard();
+            Vector3 playerTarget = GetStance(GetRole(player), rb.position.y) + delta;
+            float allowed = motionGuard.Limit(new[] { Rigidbody.position + delta, playerTarget },
+                new[] { Rigidbody.rotation, rb.rotation });
+            delta *= allowed;
+            soloPivot += delta;
+            Rigidbody.MovePosition(Rigidbody.position + delta);
+            rb.MovePosition(Vector3.Lerp(rb.position, playerTarget, allowed));
+        }
+
+        private void Align(InteractionController player, CarryRole role)
+        {
+            var rb = player.GetComponent<Rigidbody>();
+            rb.velocity = Vector3.zero;
+            Vector3 target = GetStance(role, rb.position.y);
+            Vector3 delta = Vector3.ClampMagnitude(target - rb.position, alignmentSpeed * Time.fixedDeltaTime);
+            rb.MovePosition(rb.position + SafeDelta(rb, delta));
+            Quaternion rotation = levelRotation * Quaternion.Euler(0f, role == CarryRole.Front ? 180f : 0f, 0f);
+            rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, rotation, 180f * Time.fixedDeltaTime));
+        }
+
+        private Vector3 SafeDelta(Rigidbody body, Vector3 delta)
+        {
+            float distance = delta.magnitude;
+            if (distance < .00001f) return Vector3.zero;
+            foreach (var hit in body.SweepTestAll(delta / distance, distance + .02f, QueryTriggerInteraction.Ignore))
+            {
+                if (hit.collider.transform.IsChildOf(transform) ||
+                    (frontHolder && hit.collider.transform.IsChildOf(frontHolder.transform)) ||
+                    (backHolder && hit.collider.transform.IsChildOf(backHolder.transform))) continue;
+                // Tangential contact with the floor should not block horizontal movement.
+                if (Vector3.Dot(hit.normal, delta / distance) >= -.01f) continue;
+                distance = Mathf.Min(distance, Mathf.Max(0f, hit.distance - .02f));
+            }
+            return delta.normalized * distance;
+        }
+
+        private void OnDisable()
+        {
+            if (!Application.isPlaying) return;
+            if (frontHolder) frontHolder.ReleaseHeldObject();
+            if (backHolder) backHolder.ReleaseHeldObject();
+        }
+    }
+}

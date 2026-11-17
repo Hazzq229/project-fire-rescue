@@ -11,17 +11,28 @@ namespace HInteractions
         [field: SerializeField] public Vector3 LiftDirectionOffset { get; private set; } = Vector3.zero;
 
         public Rigidbody Rigidbody { get; protected set; }
-        
+
         // List object holder
         public List<IObjectHolder> Holders { get; protected set; } = new List<IObjectHolder>();
         public bool IsLifted => Holders.Count > 0;
+        public bool SupportsStableSingleCarry => maxHolders == 1;
 
         [Header("Movement Settings")]
-        [SerializeField] protected float defaultSpeedPenalty = 0f; 
+        [SerializeField] protected float defaultSpeedPenalty = 0f;
         [SerializeField] protected bool defaultForceFaceObject = false;
 
         // getter that can be accessed from another script
-        public virtual float SpeedPenalty => defaultSpeedPenalty;
+        public virtual float SpeedPenalty
+        {
+            get
+            {
+                // Satu sumber penalti: adaptasi valid menggantikan default, bukan ditumpuk.
+                var adaptation = GetComponent<TA.AdaptiveAnimation.CarryWeightMovement>();
+                if (adaptation && adaptation.TryGetSpeedPenalty(out float penalty))
+                    return penalty;
+                return defaultSpeedPenalty;
+            }
+        }
         public virtual bool ForceFaceObject => defaultForceFaceObject;
         protected List<(GameObject obj, int defaultLayer)> _defaultLayers = new();
         private float _defaultDrag;
@@ -68,7 +79,7 @@ namespace HInteractions
                 RevertLayers();
                 OnAllDropped();
             }
-            
+
             OnAnyDrop();
         }
         protected virtual void OnFirstPickup()
@@ -76,15 +87,15 @@ namespace HInteractions
             Rigidbody.useGravity = false;
             Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
             Rigidbody.drag = 10f;
-            Rigidbody.angularDrag = 10f;  
-        } 
+            Rigidbody.angularDrag = 10f;
+        }
         protected virtual void OnAllDropped()
         {
             Rigidbody.useGravity = true;
             Rigidbody.interpolation = RigidbodyInterpolation.None;
             Rigidbody.drag = _defaultDrag;
-            Rigidbody.angularDrag = _defaultAngularDrag; 
-        }  
+            Rigidbody.angularDrag = _defaultAngularDrag;
+        }
         protected virtual void OnAnyPickup() { }   // Saat ada orang baru join angkat
         protected virtual void OnAnyDrop() { }     // Saat ada satu orang lepas
 

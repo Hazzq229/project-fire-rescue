@@ -202,6 +202,9 @@ namespace HPhysic
                 connectors.Add(endConn);
 
             points.Add(end.transform);
+            SetCableLength(CableLength);
+            for (int i = 1; i < points.Count - 1; i++)
+                if (points[i]) points[i].localScale = Vector3.one * size;
         }
 
         private void Update()
@@ -290,5 +293,20 @@ namespace HPhysic
         public Connector StartConnector => startConnector;
         public Connector EndConnector => endConnector;
         public IReadOnlyList<Transform> Points => points;
+        public float CableLength => space * (numberOfPoints + 1);
+        public Vector3 SourcePosition => start.transform.position;
+
+        // Change the rest length of the existing rope; retain all bodies, joints and connections.
+        public void SetCableLength(float metres)
+        {
+            space = Mathf.Max(.05f, metres / (numberOfPoints + 1));
+            foreach (var joint in GetComponentsInChildren<SpringJoint>())
+            {
+                if (!joint.connectedBody || !joint.connectedBody.transform.IsChildOf(transform)) continue;
+                joint.minDistance = space;
+                joint.maxDistance = space;
+            }
+            brakeLength = space * numberOfPoints * brakeLengthMultiplier + 2f;
+        }
     }
 }

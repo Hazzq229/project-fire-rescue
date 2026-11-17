@@ -1,0 +1,5 @@
+{
+  "name": "AdaptiveCarry.Tests",
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}

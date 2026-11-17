@@ -1,66 +1,50 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace HPlayer
 {
     [DisallowMultipleComponent]
-    [DefaultExecutionOrder(-100)]
+    [RequireComponent(typeof(PlayerInput))]
     public class LocalPlayerInput : MonoBehaviour
     {
-        public enum KeyboardProfile { Player1_WASD, Player2_Arrows }
-        [SerializeField] private KeyboardProfile profile = KeyboardProfile.Player1_WASD;
+        private PlayerInput _playerInput;
+        [SerializeField] private string keyboardControlScheme;
 
-        private InputActionMap actionMap;
-        private InputAction move, grab, door, tool;
-        public bool IsReady => isActiveAndEnabled && actionMap != null &&
-                               actionMap.enabled && Application.isFocused;
-        public Vector2 MoveInput => IsReady ? move.ReadValue<Vector2>() : Vector2.zero;
-        public bool GrabPressed => IsReady && grab.WasPressedThisFrame();
-        public bool GrabHeld => IsReady && grab.IsPressed();
-        public bool DoorPressed => IsReady && door.WasPressedThisFrame();
-        public bool ToolPressed => IsReady && tool.WasPressedThisFrame();
+        public PlayerInput PlayerInputComponent => _playerInput;
+        public bool IsReady => isActiveAndEnabled && _playerInput != null && Application.isFocused;
 
-        private void OnEnable()
+        private void Awake()
         {
-            // Setiap player memiliki instance action terpisah dengan binding berbeda.
-            actionMap = new InputActionMap("LocalPlayer_" + profile);
-            move = actionMap.AddAction("Move", InputActionType.Value);
-            move.expectedControlType = "Vector2";
-            grab = actionMap.AddAction("Grab", InputActionType.Button);
-            door = actionMap.AddAction("Door", InputActionType.Button);
-            tool = actionMap.AddAction("Tool", InputActionType.Button);
-
-            if (profile == KeyboardProfile.Player1_WASD)
-            {
-                move.AddCompositeBinding("2DVector(mode=0)")
-                    .With("Up", "<Keyboard>/w")
-                    .With("Down", "<Keyboard>/s")
-                    .With("Left", "<Keyboard>/a")
-                    .With("Right", "<Keyboard>/d");
-                grab.AddBinding("<Keyboard>/f");
-                door.AddBinding("<Keyboard>/e");
-                tool.AddBinding("<Keyboard>/g");
-            }
-            else
-            {
-                move.AddCompositeBinding("2DVector(mode=0)")
-                    .With("Up", "<Keyboard>/upArrow")
-                    .With("Down", "<Keyboard>/downArrow")
-                    .With("Left", "<Keyboard>/leftArrow")
-                    .With("Right", "<Keyboard>/rightArrow");
-                grab.AddBinding("<Keyboard>/rightCtrl");
-                door.AddBinding("<Keyboard>/rightShift");
-                tool.AddBinding("<Keyboard>/enter");
-            }
-            actionMap.Enable();
+            _playerInput = GetComponent<PlayerInput>();
         }
 
-        private void OnDisable()
+        private void Start()
         {
-            if (actionMap == null) return;
-            actionMap.Disable();
-            actionMap.Dispose();
-            actionMap = null;
+            if (string.IsNullOrEmpty(keyboardControlScheme) || Keyboard.current == null || !_playerInput) return;
+            _playerInput.neverAutoSwitchControlSchemes = true;
+            _playerInput.SwitchCurrentControlScheme(keyboardControlScheme, Keyboard.current);
+            _playerInput.SwitchCurrentActionMap("Player");
         }
+
+        private InputAction GetAction(string actionName)
+        {
+            if (!IsReady || _playerInput.actions == null) return null;
+            return _playerInput.actions.FindAction(actionName);
+        }
+
+        public Vector2 MoveInput => GetAction("Move")?.ReadValue<Vector2>() ?? Vector2.zero;
+        public bool GrabPressed => GetAction("Grab")?.WasPressedThisFrame() ?? false;
+        public bool GrabHeld => GetAction("Grab")?.IsPressed() ?? false;
+        public bool DoorPressed => GetAction("Door")?.WasPressedThisFrame() ?? false;
+        public bool ObjectInteractPressed => DoorPressed;
+        public bool ToolPressed => GetAction("Tool")?.WasPressedThisFrame() ?? false;
+        public bool ToolHeld => GetAction("Tool")?.IsPressed() ?? false;
+        public Vector2 HoseAim => GetAction("HoseAim")?.ReadValue<Vector2>() ?? Vector2.zero;
+        public bool HoseExtendPressed => GetAction("HoseExtend")?.WasPressedThisFrame() ?? false;
+        public bool HoseRetractPressed => GetAction("HoseRetract")?.WasPressedThisFrame() ?? false;
+        // The existing Run binding is a one-shot dash button for both keyboard schemes.
+        // Dash triggers from dedicated Dash action (gamepad buttonSouth/leftTrigger, keyboard shift/alt) or legacy Run action.
+        public bool DashPressed => (GetAction("Dash")?.WasPressedThisFrame() ?? false) || (GetAction("Run")?.WasPressedThisFrame() ?? false);
+        public bool ThrowPressed => GetAction("Throw")?.WasPressedThisFrame() ?? false;
     }
 }

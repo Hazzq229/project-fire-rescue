@@ -9,11 +9,12 @@ namespace HPlayer
         {
             if (!doorController) doorController = GetComponentInParent<DoorInteractionController>();
         }
-        // SATU event kontak per clip. Aksi fisik ditentukan keadaan pintu.
-        public void Door_Contact()
+        // One contact event per clip; the reserved object decides the action.
+        public void Object_Contact()
         {
             if (doorController && doorController.isActiveAndEnabled) doorController.ActAtContact();
         }
+        public void Door_Contact() => Object_Contact();
         // Alias untuk event lama. Jangan pasang alias DAN Door_Contact pada satu clip.
         public void Door_Open() => Door_Contact();
         public void Door_Close() => Door_Contact();
