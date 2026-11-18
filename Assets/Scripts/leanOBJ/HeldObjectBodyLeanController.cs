@@ -139,8 +139,11 @@ namespace TA.AdaptiveAnimation
             }
             if (interactionController && held is CooperativeHoseGrip hoseGrip && hoseGrip.Hose)
             {
-                targetAngle = hoseGrip.Hose.Pressure * (carryRole == CarryRole.Front ? 9f : 4f);
-                targetEffort = hoseGrip.Hose.GetCarryEffort(interactionController);
+                var hose = hoseGrip.Hose;
+                float pressure = hose.Pressure;
+                targetAngle = pressure * (carryRole == CarryRole.Front ? 9f : 4f);
+                targetEffort = Vector3.Cross(Vector3.up, hose.GetPlayerVelocity(interactionController)) *
+                    (1.4f / (1f + pressure * .75f));
                 loadPose = false;
                 status = "Menahan tekanan fire hose";
             }

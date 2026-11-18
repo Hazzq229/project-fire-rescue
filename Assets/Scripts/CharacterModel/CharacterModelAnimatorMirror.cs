@@ -27,6 +27,7 @@ namespace TA.AdaptiveAnimation
         }
 
         private RetargetedLimb[] limbs;
+        private FreeWalkFootContacts walkFeet;
         private Animator cachedAnimator;
         private float carryStrideYaw;
 
@@ -36,8 +37,12 @@ namespace TA.AdaptiveAnimation
             carryStrideYaw = 0f;
         }
 
+        private void OnDisable() => walkFeet?.Reset();
+
         public void Configure(Animator source, Transform sourceSkeletonRoot, Transform replacementSkeletonRoot)
         {
+            walkFeet?.Reset();
+            walkFeet = null;
             sourceAnimator = source;
             limbs = null;
             if (!sourceSkeletonRoot || !replacementSkeletonRoot)
@@ -71,16 +76,29 @@ namespace TA.AdaptiveAnimation
         {
             if (bonePairs == null || bonePairs.Length == 0) return;
 
+            var mover = sourceAnimator ? sourceAnimator.GetComponent<ThirdPersonPlayerController>() : null;
+            Vector2 lean = mover ? mover.WalkBodyLean : Vector2.zero;
             for (var i = 0; i < bonePairs.Length; i++)
             {
                 var pair = bonePairs[i];
                 if (pair.source && pair.target)
                 {
                     pair.target.localRotation = pair.source.localRotation;
+                    if (lean.sqrMagnitude > .0001f && pair.target.name == "spine.003")
+                    {
+                        pair.target.rotation = Quaternion.AngleAxis(lean.y, mover.transform.forward) *
+                            Quaternion.AngleAxis(lean.x, mover.transform.right) * pair.target.rotation;
+                    }
                 }
             }
 
-            ApplyCarryStrideDirection();
+            ApplyCarryStrideDirection(mover);
+            if (Application.isPlaying && mover && mover.FreeWalkFloorOffset > 0f && sourceAnimator.isActiveAndEnabled)
+            {
+                if (walkFeet == null) walkFeet = new FreeWalkFootContacts(transform, bonePairs);
+                walkFeet.Apply(mover, sourceAnimator);
+            }
+            else walkFeet?.Reset();
 
             // Copying rotations alone cannot preserve world-space contacts on a model with
             // different rest proportions. Resolve the same active IK targets on its own bones.
@@ -100,16 +118,15 @@ namespace TA.AdaptiveAnimation
                 if (influence <= 0f) continue;
                 float positionWeight = influence * data.targetPositionWeight;
                 if (positionWeight > 0f)
-                    SolveContact(limb, Vector3.Lerp(limb.tip.position, data.target.position, positionWeight),
+                    SolveContact(limb.root, limb.mid, limb.tip, Vector3.Lerp(limb.tip.position, data.target.position, positionWeight),
                         data.hint, data.hintWeight * influence);
                 limb.tip.rotation = Quaternion.Slerp(limb.tip.rotation, data.target.rotation,
                     influence * data.targetRotationWeight);
             }
         }
 
-        private void ApplyCarryStrideDirection()
+        private void ApplyCarryStrideDirection(ThirdPersonPlayerController mover)
         {
-            var mover = sourceAnimator ? sourceAnimator.GetComponent<ThirdPersonPlayerController>() : null;
             if (!mover || !mover.UsesCarryStrideDirection) { carryStrideYaw = 0f; return; }
             Vector3 velocity = mover.LocomotionVelocity;
             float yaw = 0f;
@@ -151,18 +168,21 @@ namespace TA.AdaptiveAnimation
             limbs = found.ToArray();
         }
 
-        private static void SolveContact(RetargetedLimb limb, Vector3 target, Transform hint, float hintWeight)
+        internal static void SolveContact(Transform root, Transform mid, Transform tip, Vector3 target,
+            Transform hint, float hintWeight, Vector3 preferredBend = default)
         {
-            Vector3 origin = limb.root.position;
-            float upper = Vector3.Distance(origin, limb.mid.position);
-            float lower = Vector3.Distance(limb.mid.position, limb.tip.position);
+            Vector3 origin = root.position;
+            float upper = Vector3.Distance(origin, mid.position);
+            float lower = Vector3.Distance(mid.position, tip.position);
             Vector3 delta = target - origin;
             float distance = delta.magnitude;
             if (upper < .0001f || lower < .0001f || distance < .0001f) return;
             Vector3 direction = delta / distance;
             float solvedDistance = Mathf.Clamp(distance, Mathf.Abs(upper - lower) + .00001f,
                 upper + lower - .00001f);
-            Vector3 bend = Vector3.ProjectOnPlane(limb.mid.position - origin, direction);
+            Vector3 bend = Vector3.ProjectOnPlane(mid.position - origin, direction);
+            if (preferredBend.sqrMagnitude > .001f)
+                bend = Vector3.ProjectOnPlane(preferredBend, direction);
             if (hint && hintWeight > 0f)
             {
                 Vector3 hinted = Vector3.ProjectOnPlane(hint.position - origin, direction);
@@ -174,19 +194,19 @@ namespace TA.AdaptiveAnimation
             float along = (upper * upper + solvedDistance * solvedDistance - lower * lower) / (2f * solvedDistance);
             float away = Mathf.Sqrt(Mathf.Max(0f, upper * upper - along * along));
             Vector3 elbow = origin + direction * along + bend.normalized * away;
-            limb.root.rotation = Quaternion.FromToRotation(limb.mid.position - origin, elbow - origin) * limb.root.rotation;
+            root.rotation = Quaternion.FromToRotation(mid.position - origin, elbow - origin) * root.rotation;
             Vector3 reachableTarget = origin + direction * solvedDistance;
-            limb.mid.rotation = Quaternion.FromToRotation(limb.tip.position - limb.mid.position,
-                reachableTarget - limb.mid.position) * limb.mid.rotation;
+            mid.rotation = Quaternion.FromToRotation(tip.position - mid.position,
+                reachableTarget - mid.position) * mid.rotation;
 
             // Imported armatures may have non-uniform rest transforms. A few rotation-only
             // refinements remove residual analytical error without editing lengths or scale.
-            for (int i = 0; i < 8 && (limb.tip.position - reachableTarget).sqrMagnitude > .000001f; i++)
+            for (int i = 0; i < 8 && (tip.position - reachableTarget).sqrMagnitude > .000001f; i++)
             {
-                limb.mid.rotation = Quaternion.FromToRotation(limb.tip.position - limb.mid.position,
-                    reachableTarget - limb.mid.position) * limb.mid.rotation;
-                limb.root.rotation = Quaternion.FromToRotation(limb.tip.position - limb.root.position,
-                    reachableTarget - limb.root.position) * limb.root.rotation;
+                mid.rotation = Quaternion.FromToRotation(tip.position - mid.position,
+                    reachableTarget - mid.position) * mid.rotation;
+                root.rotation = Quaternion.FromToRotation(tip.position - root.position,
+                    reachableTarget - root.position) * root.rotation;
             }
         }
     }

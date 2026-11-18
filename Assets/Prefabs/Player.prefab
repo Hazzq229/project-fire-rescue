@@ -1657,6 +1657,10 @@ MonoBehaviour:
   _animator: {fileID: 7399493680598111440}
   _moveSpeed: 1
   _unladenWalkSpeedMultiplier: 1.5
+  _unladenWalkResponse: 3
+  _unladenTurnSmoothTime: 0.13
+  _unladenWalkLean: 8
+  _freeWalkFloorOffset: 0.14965
   _rotationSpeed: 18
   _dashSpeed: 6
   _dashDuration: 0.28

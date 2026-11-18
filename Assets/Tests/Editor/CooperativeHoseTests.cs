@@ -23,6 +23,151 @@ public class CooperativeHoseTests
     }
     static Component C(GameObject o, string type) => o.GetComponent(T(type));
     static Transform Foot(GameObject player) => player.GetComponentsInChildren<Transform>().First(t => t.name == "foot.L");
+    // Use the paired keyboard through the real Input System without coupling this
+    // editor test assembly to Assembly-CSharp or package assembly references.
+    static void KeyboardState(params string[] pressed)
+    {
+        // The editor test runner's progress window can own native focus even
+        // after GameView.Focus(). Notify the player loop of the same focus
+        // event before injecting this test's synthetic keyboard state.
+        UnityEditorInternal.InternalEditorUtility.OnGameViewFocus(true);
+        var keyType = T("UnityEngine.InputSystem.Key");
+        var keys = Array.CreateInstance(keyType, pressed.Length);
+        for (int i = 0; i < pressed.Length; i++) keys.SetValue(Enum.Parse(keyType, pressed[i]), i);
+        var stateType = T("UnityEngine.InputSystem.LowLevel.KeyboardState");
+        object state = Activator.CreateInstance(stateType, new object[] { keys });
+        var keyboard = T("UnityEngine.InputSystem.Keyboard").GetProperty("current").GetValue(null);
+        Assert.IsNotNull(keyboard, "The demo's shared keyboard must be available");
+        T("UnityEngine.InputSystem.InputSystem").GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(m => m.Name == "QueueStateEvent" && m.IsGenericMethodDefinition)
+            .MakeGenericMethod(stateType).Invoke(null, new[] { keyboard, state, (object)(-1d) });
+    }
+    static void ResetKeyboard()
+    {
+        KeyboardState();
+        // Flush the release before ExitPlayMode reloads the domain; otherwise
+        // the following test can inherit the previous synthetic aim key.
+        T("UnityEngine.InputSystem.InputSystem").GetMethod("Update", Type.EmptyTypes).Invoke(null, null);
+    }
+    static void CheckMovingContacts(GameObject player)
+    {
+        var grip = player.GetComponentInChildren(T("TA.AdaptiveAnimation.HeldObjectGripController"));
+        Assert.Greater((float)F(grip, "currentWeight"), .95f, player.name + " must keep the hose grip active");
+        var slot = C(player, "TA.AdaptiveAnimation.CharacterModelSlot");
+        var visuals = (GameObject)F(slot, "generatedVisuals");
+        foreach (string side in new[] { "L", "R" })
+        {
+            var constraint = F(grip, side == "L" ? "leftArmIK" : "rightArmIK");
+            Type type = constraint.GetType(); FieldInfo dataField = null;
+            while (type != null && dataField == null) { dataField = type.GetField("m_Data", Flags); type = type.BaseType; }
+            var target = (Transform)P(dataField.GetValue(constraint), "target");
+            var visibleHand = visuals.GetComponentsInChildren<Transform>().First(t => t.name == "hand." + side);
+            Assert.Less(Vector3.Distance(visibleHand.position, target.position), .045f,
+                player.name + " visible hand " + side + " must stay on the hose during movement");
+        }
+    }
+    static void CheckStraightSpan(Component hose)
+    {
+        var cable = (Component)F(hose, "cable");
+        var points = ((IEnumerable)P(cable, "Points")).Cast<Transform>().ToArray();
+        var front = (Component)P(hose, "FrontPlayer");
+        var rear = (Component)P(hose, "RearPlayer");
+        Assert.Less(Vector3.Distance(rear.transform.position, (Vector3)Call(hose, "RearStance")), .05f,
+            "Check straightness after the rear operator settles into formation");
+        Vector3 forward = Vector3.ProjectOnPlane((Vector3)P(hose, "AimDirection"), Vector3.up).normalized;
+        Vector3 span = Vector3.ProjectOnPlane(points[points.Length - 2].position - points[points.Length - 3].position, Vector3.up);
+        Assert.Greater(span.magnitude, .6f, "The straight supported span must extend between the two operators");
+        Assert.Less(Vector3.Cross(span, forward).magnitude, .015f,
+            "The between-player span must follow the formation rather than bending around a guide behind the front player");
+        Assert.Greater(Vector3.Dot(span.normalized, forward), .995f);
+        Assert.Greater(Vector3.Dot(points[points.Length - 2].position - front.transform.position, forward), .1f,
+            "Keep the short nozzle lead in front of the front operator, outside the torso");
+    }
+    static void CheckNozzleGeometry(GameObject player, GameObject nozzle)
+    {
+        var slot = C(player, "TA.AdaptiveAnimation.CharacterModelSlot");
+        var visuals = (GameObject)F(slot, "generatedVisuals");
+        var skins = visuals.GetComponentsInChildren<SkinnedMeshRenderer>()
+            .Where(r => r.enabled && new[] { "Kepala", "Badan", "Baju", "Kerah_Baju" }.Contains(r.name)).ToArray();
+        foreach (string name in new[] { "Kepala", "Badan", "Baju", "Kerah_Baju" })
+            Assert.IsTrue(skins.Any(r => r.name == name), "Missing visible body geometry " + name);
+        var filters = nozzle.GetComponentsInChildren<MeshFilter>()
+            .Where(f => f.sharedMesh && f.TryGetComponent<MeshRenderer>(out var r) && r.enabled).ToArray();
+        Assert.Greater(filters.Length, 0, "Nozzle must have visible geometry to test");
+        var probes = new System.Collections.Generic.List<GameObject>();
+        var bakedMeshes = new System.Collections.Generic.List<Mesh>();
+        try
+        {
+            var bodyColliders = new System.Collections.Generic.List<MeshCollider>();
+            foreach (var skin in skins)
+            {
+                var mesh = new Mesh { name = "Baked " + skin.name };
+                bakedMeshes.Add(mesh);
+                skin.BakeMesh(mesh, true);
+                mesh.vertices = mesh.vertices.Select(skin.transform.TransformPoint).ToArray();
+                mesh.RecalculateBounds();
+                var probe = new GameObject("Hose body probe " + skin.name);
+                probes.Add(probe);
+                var collider = probe.AddComponent<MeshCollider>();
+                collider.sharedMesh = mesh;
+                // These colliders must remain enabled until the query has cooked
+                // their meshes. They are destroyed before any physics step occurs.
+                collider.convex = false;
+                bodyColliders.Add(collider);
+            }
+            var nozzleColliders = new System.Collections.Generic.List<Collider>();
+            foreach (var filter in filters)
+            {
+                var probe = new GameObject("Hose nozzle probe " + filter.name);
+                probes.Add(probe);
+                probe.transform.SetPositionAndRotation(filter.transform.position, filter.transform.rotation);
+                probe.transform.localScale = filter.transform.lossyScale;
+                var collider = probe.AddComponent<MeshCollider>();
+                collider.convex = true;
+                collider.sharedMesh = filter.sharedMesh;
+                nozzleColliders.Add(collider);
+            }
+            var hose = C(nozzle, "TA.AdaptiveAnimation.CooperativeFireHose");
+            var cable = (Component)F(hose, "cable");
+            var points = ((IEnumerable)P(cable, "Points")).Cast<Transform>().ToArray();
+            float radius = (float)F(cable, "size") * .5f;
+            for (int i = points.Length - 4; i < points.Length - 1; i++)
+            {
+                Vector3 start = points[i].position, end = points[i + 1].position;
+                var probe = new GameObject("Hose held span probe " + i);
+                probes.Add(probe);
+                probe.transform.SetPositionAndRotation((start + end) * .5f, Quaternion.LookRotation(end - start));
+                var collider = probe.AddComponent<CapsuleCollider>();
+                collider.direction = 2;
+                collider.radius = radius;
+                collider.height = Vector3.Distance(start, end) + radius * 2f;
+                nozzleColliders.Add(collider);
+            }
+            Physics.SyncTransforms();
+            foreach (var body in bodyColliders)
+                Assert.Greater(body.bounds.size.sqrMagnitude, .000001f, body.name + " must be cooked and enabled");
+            foreach (var nozzleCollider in nozzleColliders)
+            {
+                Assert.Greater(nozzleCollider.bounds.size.sqrMagnitude, .000001f,
+                    nozzleCollider.name + " must be cooked and enabled");
+                foreach (var body in bodyColliders)
+                {
+                    Vector3 direction; float depth;
+                    bool overlaps = Physics.ComputePenetration(nozzleCollider, nozzleCollider.transform.position,
+                        nozzleCollider.transform.rotation, body, body.transform.position, body.transform.rotation,
+                        out direction, out depth);
+                    Assert.That(overlaps ? depth : 0f, Is.LessThan(.015f),
+                        player.name + ": " + nozzleCollider.name + " penetrates " + body.name);
+                }
+            }
+        }
+        finally
+        {
+            foreach (var probe in probes) UnityEngine.Object.DestroyImmediate(probe);
+            foreach (var mesh in bakedMeshes) UnityEngine.Object.DestroyImmediate(mesh);
+        }
+    }
+
     internal static void CheckHandContact(Component grip)
     {
         foreach (string name in new[] { "leftArmIK", "rightArmIK" })

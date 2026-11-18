@@ -67,7 +67,7 @@ public class GameloopMigrationTests
         Assert.IsTrue((bool)T("LocalCoopSession").GetMethod("IsJoined").Invoke(null, new object[] { 1 }));
         Call(menu, "StartGame");
         yield return Wait(.6f);
-        Assert.AreEqual("Gameloop_Demo", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        Assert.AreEqual("Gameloop_IJUN", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         Assert.IsTrue((bool)P(C(GameObject.Find("FR_Level_1"), "TA.AdaptiveAnimation.AdaptiveSceneProps"), "IsReady"));
         foreach (string name in new[] { "Player1", "Player2" })
         {
@@ -383,13 +383,26 @@ public class GameloopMigrationTests
         Assert.IsTrue((bool)P(a, "IsPickingUp"), "Grab must start pickup animation");
         for (float until = Time.time + 4f; (bool)P(a, "IsPickingUp") && Time.time < until;) yield return null;
         Assert.AreSame(C(front, "TA.AdaptiveAnimation.CooperativeHoseGrip"), P(a, "HeldObject"));
-        Position(p2, (Vector3)Call(hose, "RearStance"), Quaternion.identity);
-        yield return Wait(.4f);
-        Keys("RightCtrl"); yield return Wait(.08f); Keys();
         var b = C(p2, "HPlayer.InteractionController");
-        Assert.IsTrue((bool)P(b, "IsPickingUp"));
+        var rear = GameObject.Find("Hose_RearGrip");
+        var rearGrip = C(rear, "TA.AdaptiveAnimation.CooperativeHoseGrip");
+        var rearTrigger = rear.GetComponent<BoxCollider>();
+        var handTrigger = (BoxCollider)F(b, "handTrigger");
+        // The unheld grip follows the cable, so aim the grab trigger at its live position.
+        yield return Wait(.4f);
+        for (float until = Time.time + .8f; !ReferenceEquals(P(b, "SelectedObject"), rearGrip) && Time.time < until;)
+        {
+            Vector3 handOffset = handTrigger.transform.TransformPoint(handTrigger.center) - p2.transform.position;
+            Vector3 stance = rearTrigger.bounds.center - handOffset;
+            stance.y = .35f;
+            Position(p2, stance, Quaternion.identity);
+            yield return Wait(.08f);
+        }
+        Assert.AreSame(rearGrip, P(b, "SelectedObject"), "Player 2 must be within grab reach of the live rear grip");
+        Keys("RightCtrl"); yield return Wait(.08f); Keys();
+        Assert.IsTrue((bool)P(b, "IsPickingUp"), "Player 2 Grab must start the rear pickup animation");
         for (float until = Time.time + 4f; (bool)P(b, "IsPickingUp") && Time.time < until;) yield return null;
-        Assert.AreSame(C(GameObject.Find("Hose_RearGrip"), "TA.AdaptiveAnimation.CooperativeHoseGrip"), P(b, "HeldObject"));
+        Assert.AreSame(rearGrip, P(b, "HeldObject"));
         yield return Wait(.8f);
         Assert.IsTrue((bool)P(hose, "ReadyToSpray"));
     }

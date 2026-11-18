@@ -10,14 +10,30 @@ public class ThirdPersonPlayerController : MonoBehaviour
 
     [Header("Movement Settings")]
     [SerializeField] private float _moveSpeed = 8f;
+    [Tooltip("Free walking only; carried loads and cooperative movement keep Base Move Speed.")]
+    [SerializeField, Min(1f)] private float _unladenWalkSpeedMultiplier = 1f;
+    [Tooltip("Free walk acceleration, braking, and cadence response. Set to 1 to use the standard response.")]
+    [SerializeField, Min(1f)] private float _unladenWalkResponse = 1f;
+    [Tooltip("Smoothing time in seconds for free walking turns. Set to 0 for the standard turn.")]
+    [SerializeField, Min(0f)] private float _unladenTurnSmoothTime;
+    [Tooltip("Visual torso lean during free walking, in degrees.")]
+    [SerializeField, Range(0f, 15f)] private float _unladenWalkLean;
+    [Tooltip("Visible walking surface below the player root, in meters. Zero disables visual foot planting.")]
+    [SerializeField, Min(0f)] private float _freeWalkFloorOffset;
     [SerializeField] private float _rotationSpeed = 15f;
-    [SerializeField, Min(1f)] private float _runMultiplier = 1.65f;
+    [SerializeField, Min(.1f)] private float _dashSpeed = 6f;
+    [SerializeField, Min(.01f)] private float _dashDuration = .28f;
+    [SerializeField, Min(0f)] private float _dashCooldown = .65f;
     [SerializeField, Min(.1f)] private float _acceleration = 14f;
     [SerializeField, Min(.1f)] private float _deceleration = 20f;
     [SerializeField, Min(.01f)] private float _animationDamping = .15f;
-    private bool _runRequested, _hasLocomotionRate;
+    [SerializeField, Min(.1f)] private float _walkAnimationReferenceSpeed = 1f;
+    private bool _hasLocomotionRate, _hasQuickWalkBlend;
+    private float _dashRemaining, _dashCooldownRemaining;
+    private Vector3 _dashDirection;
     private InteractionController _interaction;
     private float _animatedSpeed;
+    private float _walkTurnVelocity;
 
     [Header("Camera Relative Settings")]
     [SerializeField] private bool _useCameraRelativeMovement = true;
@@ -30,11 +46,19 @@ public class ThirdPersonPlayerController : MonoBehaviour
     private Vector2 _inputVector;
     private bool _movementLocked;
     private static readonly int WalkingId = Animator.StringToHash("isWalking");
-    private static readonly int RunningId = Animator.StringToHash("isRunning");
+    private static readonly int DashingId = Animator.StringToHash("isDashing");
     private static readonly int RateId = Animator.StringToHash("LocomotionRate");
+    private static readonly int QuickWalkBlendId = Animator.StringToHash("QuickWalkBlend");
 
     public Animator CharacterAnimator => _animator;
     public float BaseMoveSpeed => _moveSpeed;
+    public float UnladenMoveSpeed => _moveSpeed * _unladenWalkSpeedMultiplier;
+    public Vector2 WalkBodyLean { get; private set; }
+    public float FreeWalkFloorOffset => _freeWalkFloorOffset;
+    public bool CanPlantWalkingFeet => _freeWalkFloorOffset > 0f && IsUnladen && !_movementLocked &&
+        !IsKnockedBack && _dashRemaining <= 0f;
+    internal bool IsReversingFreeWalk => Vector3.Dot(transform.forward,
+        GetCameraRelativeDirection(_inputVector)) < -.5f;
     public bool UseCameraRelativeMovement
     {
         get => _useCameraRelativeMovement;
@@ -58,6 +82,21 @@ public class ThirdPersonPlayerController : MonoBehaviour
     }
     public TA.AdaptiveAnimation.CooperativeCarryObject CooperativeCarry { get; set; }
     public TA.AdaptiveAnimation.CooperativeFireHose CooperativeHose { get; set; }
+    // Coordinators report each operator's movement, including formation rotation.
+    // Both cadence and the visible model's stride plane must consume the same motion.
+    public Vector3 LocomotionVelocity
+    {
+        get
+        {
+            Vector3 velocity = CooperativeCarry ? CooperativeCarry.GetPlayerVelocity(_interaction) :
+                CooperativeHose ? CooperativeHose.GetPlayerVelocity(_interaction) :
+                _rb ? GetVelocity() : Vector3.zero;
+            velocity.y = 0f;
+            return velocity;
+        }
+    }
+    public bool UsesCarryStrideDirection => CooperativeCarry || CooperativeHose ||
+        (_interaction && _interaction.HeldObject);
     private float knockbackRemaining;
     public bool IsKnockedBack => knockbackRemaining > 0f;
 
@@ -81,8 +120,13 @@ public class ThirdPersonPlayerController : MonoBehaviour
         if (!_animator) _animator = GetComponentInChildren<Animator>();
         _interaction = GetComponent<InteractionController>();
         if (_animator)
+        {
             foreach (var parameter in _animator.parameters)
+            {
                 if (parameter.nameHash == RateId) _hasLocomotionRate = true;
+                if (parameter.nameHash == QuickWalkBlendId) _hasQuickWalkBlend = true;
+            }
+        }
 
     }
 
@@ -90,46 +134,87 @@ public class ThirdPersonPlayerController : MonoBehaviour
     private void OnDisable()
     {
         knockbackRemaining = 0f;
+        _dashRemaining = _dashCooldownRemaining = 0f;
         _inputVector = Vector2.zero;
         StopHorizontalMovement();
         if (_animator) _animator.SetBool(WalkingId, false);
-        if (_animator) _animator.SetBool(RunningId, false);
+        if (_animator) _animator.SetBool(DashingId, false);
         _animatedSpeed = 0f;
+        WalkBodyLean = Vector2.zero;
+        _walkTurnVelocity = 0f;
     }
 
     private void Update()
     {
         _inputVector = _localInput ? Vector2.ClampMagnitude(_localInput.MoveInput, 1f) : Vector2.zero;
-        _runRequested = _localInput && _localInput.RunHeld;
-        Vector3 actual = CooperativeCarry ? CooperativeCarry.GetPlayerVelocity(_interaction) :
-            CooperativeHose ? CooperativeHose.GetPlayerVelocity(_interaction) : GetVelocity();
-        actual.y = 0f;
+        if (_localInput && _localInput.DashPressed) TryStartDash();
+        Vector3 actual = LocomotionVelocity;
         UpdateLocomotionAnimation(_movementLocked || IsKnockedBack ? 0f : actual.magnitude, Time.deltaTime);
     }
 
     private void UpdateLocomotionAnimation(float speed, float deltaTime)
     {
         if (!_animator) return;
-        _animatedSpeed = Mathf.Lerp(_animatedSpeed, speed, 1f - Mathf.Exp(-deltaTime / _animationDamping));
+        bool unladen = IsUnladen;
+        bool quickWalk = unladen && !_movementLocked && !IsKnockedBack && _dashRemaining <= 0f;
+        float blend = 1f - Mathf.Exp(-deltaTime * (quickWalk ? _unladenWalkResponse : 1f) / _animationDamping);
+        _animatedSpeed = Mathf.Lerp(_animatedSpeed, speed, blend);
+        if (_hasQuickWalkBlend) _animator.SetBool(QuickWalkBlendId, quickWalk && _unladenWalkResponse > 1f);
+        if (quickWalk && _unladenWalkLean > 0f)
+        {
+            float lean = _unladenWalkLean * Mathf.Clamp01(speed / Mathf.Max(.01f, UnladenMoveSpeed));
+            float bank = Mathf.Clamp(_walkTurnVelocity * _unladenTurnSmoothTime / 65f, -1f, 1f);
+            WalkBodyLean = Vector2.Lerp(WalkBodyLean, new Vector2(lean, -_unladenWalkLean * bank), blend);
+        }
+        else WalkBodyLean = Vector2.zero;
         bool wasWalking = _animator.GetBool(WalkingId);
-        bool walking = _animatedSpeed > (wasWalking ? .035f : .08f);
-        bool running = !CooperativeCarry && !CooperativeHose && _animatedSpeed > _moveSpeed * Mathf.Max(.01f, _speedModifier) *
-            (_animator.GetBool(RunningId) ? 1.08f : 1.2f);
+        // A solo heavy carry can legitimately move at only 0.04-0.05 m/s.
+        // State changes still use unsmoothed motion so stopping does not retain a walk tail.
+        // Keep the gait phase while the character plants a foot to turn around.
+        bool pivoting = quickWalk && wasWalking && _inputVector.sqrMagnitude > .001f && Mathf.Abs(_walkTurnVelocity) > 15f;
+        bool walking = speed > (wasWalking ? .005f : .01f) || pivoting;
         _animator.SetBool(WalkingId, walking);
-        _animator.SetBool(RunningId, walking && running);
+        _animator.SetBool(DashingId, _dashRemaining > 0f);
         if (_hasLocomotionRate)
         {
-            float reference = _moveSpeed * (running ? _runMultiplier : 1f);
-            _animator.SetFloat(RateId, Mathf.Clamp(_animatedSpeed / Mathf.Max(.1f, reference), .12f, 1.3f),
-                _animationDamping, deltaTime);
+            float direction = UsesCarryStrideDirection &&
+                Vector3.Dot(LocomotionVelocity.normalized, transform.forward) < -.1f ? -1f : 1f;
+            // A playback floor makes slow heavy loads cycle faster than they travel.
+            float maximumRate = unladen ? Mathf.Max(1.3f, _unladenWalkSpeedMultiplier) : 1.3f;
+            _animator.SetFloat(RateId, direction * Mathf.Clamp(_animatedSpeed / _walkAnimationReferenceSpeed, 0f, maximumRate));
         }
     }
 
-    private float DesiredMoveSpeed(bool run) => _moveSpeed * _speedModifier *
-        (run && !CooperativeCarry && !(_interaction && _interaction.ExternalInteractionLocked) ? _runMultiplier : 1f);
+    private bool IsUnladen => !CooperativeCarry && !CooperativeHose &&
+        (!_interaction || (!_interaction.HeldObject && !_interaction.IsPickingUp &&
+            !_interaction.IsPlacingDown && !_interaction.ExternalInteractionLocked));
+
+    private bool DashBlocked => _movementLocked || IsKnockedBack || CooperativeCarry || CooperativeHose ||
+        (_interaction && (_interaction.ExternalInteractionLocked || _interaction.Interacting ||
+                          _interaction.IsPickingUp || _interaction.IsPlacingDown || _interaction.HeldObject));
+
+    private bool TryStartDash()
+    {
+        if (_dashRemaining > 0f || _dashCooldownRemaining > 0f || DashBlocked) return false;
+        _dashDirection = GetCameraRelativeDirection(_inputVector);
+        if (_dashDirection.sqrMagnitude < .01f) _dashDirection = transform.forward;
+        _dashDirection.y = 0f;
+        _dashDirection.Normalize();
+        _dashRemaining = _dashDuration;
+        _dashCooldownRemaining = _dashDuration + _dashCooldown;
+        if (_animator) _animator.SetBool(DashingId, true);
+        return true;
+    }
 
     private void FixedUpdate()
     {
+        _dashCooldownRemaining = Mathf.Max(0f, _dashCooldownRemaining - Time.fixedDeltaTime);
+        if (_dashRemaining > 0f && DashBlocked)
+            _dashRemaining = 0f;
+        bool unladen = IsUnladen;
+        bool steerWalk = unladen && !_lookTarget && !_movementLocked && !IsKnockedBack &&
+            _dashRemaining <= 0f && _unladenTurnSmoothTime > 0f;
+        if (!steerWalk) _walkTurnVelocity = 0f;
         // One coordinator moves both players; individual controllers must not fight it.
         if (IsKnockedBack)
         {
@@ -145,32 +230,72 @@ public class ThirdPersonPlayerController : MonoBehaviour
             StopHorizontalMovement();
             return;
         }
+        if (_dashRemaining > 0f)
+        {
+            _dashRemaining = Mathf.Max(0f, _dashRemaining - Time.fixedDeltaTime);
+            SetVelocity(_dashDirection * _dashSpeed);
+            _rb.MoveRotation(Quaternion.Slerp(_rb.rotation, Quaternion.LookRotation(_dashDirection),
+                _rotationSpeed * Time.fixedDeltaTime));
+            return;
+        }
 
         Vector3 direction = GetCameraRelativeDirection(_inputVector);
         Vector3 current = GetVelocity();
-        Vector3 targetVelocity = direction * DesiredMoveSpeed(_runRequested);
+        bool moving = direction.sqrMagnitude > .001f;
+        Quaternion walkRotation = _rb.rotation;
+        if (steerWalk)
+        {
+            if (moving)
+            {
+                float desiredYaw = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
+                float yaw = Mathf.SmoothDampAngle(_rb.rotation.eulerAngles.y, desiredYaw, ref _walkTurnVelocity,
+                    _unladenTurnSmoothTime, Mathf.Infinity, Time.fixedDeltaTime);
+                walkRotation = Quaternion.Euler(0f, yaw, 0f);
+                Vector3 heading = walkRotation * Vector3.forward;
+                // Follow the turn and hold back the stride until the feet face into the new input.
+                direction = heading * Mathf.Max(0f, Vector3.Dot(direction, heading));
+            }
+            else _walkTurnVelocity = 0f;
+        }
+        float response = unladen ? _unladenWalkResponse : 1f;
+        Vector3 targetVelocity = direction * ((unladen ? UnladenMoveSpeed : _moveSpeed) * _speedModifier);
         Vector3 horizontal = new Vector3(current.x, 0f, current.z);
         Vector3 velocity = Vector3.MoveTowards(horizontal, targetVelocity,
-            (targetVelocity.sqrMagnitude > horizontal.sqrMagnitude ? _acceleration : _deceleration) * Time.fixedDeltaTime);
-        velocity.y = GetVelocity().y;
-        SetVelocity(velocity);
+            (targetVelocity.sqrMagnitude > horizontal.sqrMagnitude ? _acceleration : _deceleration) * response * Time.fixedDeltaTime);
+        velocity.y = current.y;
 
-        bool moving = direction.sqrMagnitude > 0.001f;
+        if (steerWalk)
+        {
+            ApplyMovement(velocity, walkRotation);
+            return;
+        }
         float rotationSpeed = _rotationSpeed;
         if (_lookTarget)
         {
             direction = _lookTarget.position - _rb.position;
             direction.y = 0f;
-            if (direction.sqrMagnitude <= 0.001f) return;
+            if (direction.sqrMagnitude <= 0.001f) { ApplyMovement(velocity, _rb.rotation); return; }
             float angle = Vector3.Angle(_rb.rotation * Vector3.forward, direction);
-            if (!(moving || angle > 30f) || angle <= 5f) return;
+            if (!(moving || angle > 30f) || angle <= 5f) { ApplyMovement(velocity, _rb.rotation); return; }
             rotationSpeed *= 0.5f;
         }
-        else if (!moving) return;
+        else if (!moving) { ApplyMovement(velocity, _rb.rotation); return; }
 
         Quaternion target = Quaternion.LookRotation(direction);
-        _rb.MoveRotation(Quaternion.Slerp(_rb.rotation, target,
-            rotationSpeed * Time.fixedDeltaTime));
+        ApplyMovement(velocity, Quaternion.Slerp(_rb.rotation, target, rotationSpeed * Time.fixedDeltaTime));
+    }
+
+    private void ApplyMovement(Vector3 velocity, Quaternion rotation)
+    {
+        if (_interaction && _interaction.HeldObject &&
+            _interaction.HeldObject.TryGetComponent<HInteractions.StableCarryAttachment>(out var attachment))
+        {
+            Vector3 delta = velocity * Time.fixedDeltaTime;
+            attachment.ConstrainMovement(ref delta, ref rotation);
+            velocity = delta / Time.fixedDeltaTime;
+        }
+        SetVelocity(velocity);
+        _rb.MoveRotation(rotation);
     }
 
     public void SetMovementState(float penalty, Transform lookTarget)
@@ -183,10 +308,13 @@ public class ThirdPersonPlayerController : MonoBehaviour
     {
         _movementLocked = locked;
         if (!locked) return;
+        _dashRemaining = 0f;
         StopHorizontalMovement();
         if (_animator) _animator.SetBool(WalkingId, false);
-        if (_animator) _animator.SetBool(RunningId, false);
+        if (_animator) _animator.SetBool(DashingId, false);
         _animatedSpeed = 0f;
+        WalkBodyLean = Vector2.zero;
+        _walkTurnVelocity = 0f;
     }
 
     public Transform GetActiveCameraTransform()
