@@ -153,6 +153,17 @@ public class LocalCoopJoinManager : MonoBehaviour
             return;
         }
 
+        // A shared keyboard may join once per scheme, so further movement or
+        // menu-navigation presses cannot register the same controls twice.
+        for (int i = 0; i < LocalCoopSession.MaxPlayers; i++)
+        {
+            LocalCoopSession.PlayerSlot joinedSlot = LocalCoopSession.GetPlayer(i);
+            if (joinedSlot != null && joinedSlot.IsJoined &&
+                joinedSlot.ControlScheme == controlScheme && joinedSlot.Devices != null &&
+                System.Array.IndexOf(joinedSlot.Devices, device) >= 0)
+                return;
+        }
+
         if (logDeviceAssignments)
         {
             Debug.Log(

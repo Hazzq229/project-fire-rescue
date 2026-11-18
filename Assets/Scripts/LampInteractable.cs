@@ -50,7 +50,7 @@ namespace HGame.Objects
 
         public override bool PerformReservedAction(MonoBehaviour requester)
         {
-            if (!isActiveAndEnabled || !lampLight || !owner || owner != requester || performed) return false;
+            if (!isActiveAndEnabled || !lampLight || !owner || owner != requester || performed || IsCarried) return false;
             performed = true;
             SetState(reservedState);
             return true;

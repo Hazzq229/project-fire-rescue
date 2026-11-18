@@ -96,8 +96,8 @@ public class GameplayPlayerSpawner : MonoBehaviour
 
         if (wallOcclusionController != null)
         {
-            wallOcclusionController.AddFocusTarget(p1.transform);
-            wallOcclusionController.AddFocusTarget(p2.transform);
+            wallOcclusionController.AddFocusTarget(p1);
+            wallOcclusionController.AddFocusTarget(p2);
         }
     }
 

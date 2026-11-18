@@ -8,13 +8,16 @@ namespace TA.AdaptiveAnimation
         public bool UsesHosePose { get; }
         public bool HasLoad => Context.HasWeight;
         public float EffectiveWeightKg => Context.EffectiveWeightKg;
-        public string BaseAnimationState { get; }
+        /// <summary>Diagnostic route hint; interaction controllers own animation commands/events.</summary>
+        public string AnimationStateHint { get; }
+        // Compatibility for existing diagnostics and tests. This is not an Animator command.
+        public string BaseAnimationState => AnimationStateHint;
 
         internal AdaptationResult(InteractionContext context, GripPointProvider provider,
             bool usesHosePose, string animationState)
         {
             Context = context; GripProvider = provider;
-            UsesHosePose = usesHosePose; BaseAnimationState = animationState;
+            UsesHosePose = usesHosePose; AnimationStateHint = animationState;
         }
     }
 }

@@ -41,7 +41,15 @@ namespace TA.AdaptiveAnimation
             var candidates = new List<Transform>();
             foreach (var item in propsRoot.GetComponentsInChildren<Transform>(true))
             {
-                if (!item.name.StartsWith("Props_") || item == propsRoot) continue;
+                if (item == propsRoot) continue;
+                // Explicitly configured objects do not depend on naming conventions.
+                if (item.TryGetComponent<ScenePropCarrySettings>(out _))
+                {
+                    if (item.GetComponentInChildren<MeshRenderer>(true)) candidates.Add(item);
+                    continue;
+                }
+                if (item.GetComponentInParent<ScenePropCarrySettings>()) continue;
+                if (!item.name.StartsWith("Props_")) continue;
                 bool excluded = false;
                 foreach (string prefix in fixedPropPrefixes)
                     if (item.name.StartsWith(prefix)) excluded = true;
@@ -98,10 +106,12 @@ namespace TA.AdaptiveAnimation
             root.transform.position = root.transform.TransformPoint(localBounds.center);
             Vector3 dimensions = localBounds.size;
             dimensions = Vector3.Max(dimensions, Vector3.one * .025f);
-            bool team = Mathf.Max(dimensions.x, dimensions.z) > playerHeight * .65f ||
+            var settings = visual.GetComponent<ScenePropCarrySettings>();
+            bool team = settings ? settings.RequiresTwoPlayers :
+                Mathf.Max(dimensions.x, dimensions.z) > playerHeight * .65f ||
                 (visual.name.ToLowerInvariant().Contains("bookshelf") && Mathf.Max(dimensions.x, dimensions.y, dimensions.z) > playerHeight * .5f);
             ScenePropSize category = team ? ScenePropSize.Big : Classify(dimensions, playerHeight);
-            float weight = team ? 60f : category == ScenePropSize.Small ? 5f : category == ScenePropSize.Medium ? 15f : 30f;
+            float weight = settings ? settings.WeightKg : team ? 60f : category == ScenePropSize.Small ? 5f : category == ScenePropSize.Medium ? 15f : 30f;
 
             foreach (var old in visual.GetComponentsInChildren<Liftable>(true)) { old.enabled = false; Destroy(old); }
             foreach (var body in visual.GetComponentsInChildren<Rigidbody>(true))
@@ -123,7 +133,8 @@ namespace TA.AdaptiveAnimation
             root.AddComponent<CarryAnimationLoad>().Configure(weight);
             float gripY = Mathf.Min(0f, .55f - dimensions.y * .5f);
             // These imported models have readable meshes and calibrated surface grips.
-            bool surfaceGrip = visual.name.StartsWith("Props_Computer_01") || visual.name.StartsWith("Props_Table_01");
+            bool surfaceGrip = settings ? settings.GripKind == ScenePropGripKind.BoxSurface :
+                visual.name.StartsWith("Props_Computer_01") || visual.name.StartsWith("Props_Table_01");
             var provider = root.AddComponent<ScenePropGripProvider>();
             provider.Configure(shape, gripY, team, surfaceGrip);
             gripY = provider.GripHeight;

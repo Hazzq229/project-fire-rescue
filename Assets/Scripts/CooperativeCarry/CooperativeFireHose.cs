@@ -349,6 +349,7 @@ namespace TA.AdaptiveAnimation
                 ignoredCollisions.Clear();
                 foreach (var point in supportedPoints)
                     if (point.body) { point.body.isKinematic = point.kinematic; point.body.useGravity = point.gravity; }
+                if (supportedPoints.Count > 0 && cable) cable.SetCableLength(cable.CableLength);
                 supportedPoints.Clear();
                 cableJoints = null;
                 carryOffset = carryOffsetVelocity = Vector3.zero;

@@ -48,15 +48,20 @@ namespace TA.AdaptiveAnimation
         private float currentYaw;
 
         private BoxCollider shape;
-        private bool savedKinematic, savedGravity, releasing;
+        private bool savedKinematic, savedGravity;
         private RigidbodyInterpolation savedInterpolation;
         private CollisionDetectionMode savedCollisionMode;
         private RigidbodyConstraints savedConstraints;
         private Quaternion levelRotation;
         private Vector3 soloPivot;
+        private Vector3 soloLocalPivot;
+        private Quaternion soloTiltTarget;
+        private bool pendingSoloTilt;
         private CarryRole firstRole;
         private Vector3 frontEffort, backEffort;
         private readonly List<(Collider a, Collider b)> ignoredCollisions = new();
+        private readonly List<Rigidbody> supportedLoads = new();
+        private Collider[] supportedLoadContacts = new Collider[16];
         private CarryMotionGuard motionGuard;
         private InteractionController sampledFront, sampledBack;
         private Vector3 previousFront, previousBack, previousObject;
@@ -85,8 +90,99 @@ namespace TA.AdaptiveAnimation
             if (frontHolder) bodies.Add(frontHolder.GetComponent<Rigidbody>());
             if (backHolder) bodies.Add(backHolder.GetComponent<Rigidbody>());
             motionBodies = bodies.ToArray();
-            motionGuard = new CarryMotionGuard(motionBodies);
+            motionGuard = new CarryMotionGuard(supportedLoads, motionBodies);
         }
+
+        private void PrepareSupportedLoad(Rigidbody load)
+        {
+            if (!load || !load.detectCollisions || !load.TryGetComponent<AdaptiveSceneProp>(out var prop) ||
+                prop.RequiresTwoPlayers || !load.TryGetComponent<Liftable>(out var item) ||
+                !item.isActiveAndEnabled || item.IsLifted) return;
+            if (load.isKinematic)
+            {
+                load.isKinematic = false;
+                load.useGravity = true;
+                load.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+                load.WakeUp();
+            }
+            if (!supportedLoads.Contains(load)) supportedLoads.Add(load);
+            foreach (var holder in Holders)
+            {
+                var capsule = (holder as InteractionController)?.GetComponent<CapsuleCollider>();
+                if (!capsule) continue;
+                // A desktop BoxCollider includes empty space between keyboard and
+                // monitor. Treat supported cargo like the table for holder contact.
+                foreach (var collider in load.GetComponentsInChildren<Collider>())
+                    if (collider.enabled && !collider.isTrigger && collider.attachedRigidbody == load &&
+                        !Physics.GetIgnoreCollision(collider, capsule))
+                    {
+                        Physics.IgnoreCollision(collider, capsule, true);
+                        ignoredCollisions.Add((collider, capsule));
+                    }
+            }
+        }
+
+        private int QuerySupportedLoadContacts()
+        {
+            // Use the upper volume rather than an axis-aligned maximum height,
+            // so contact with the tabletop survives a supported-edge tilt.
+            Vector3 top = PhysicsPoint(shape.center + Vector3.up * shape.size.y * .25f);
+            Vector3 extent = Vector3.Scale(shape.size * .5f, transform.lossyScale);
+            extent.y = extent.y * .5f + .04f;
+            int count;
+            while ((count = Physics.OverlapBoxNonAlloc(top, extent, supportedLoadContacts, Rigidbody.rotation,
+                ~0, QueryTriggerInteraction.Ignore)) == supportedLoadContacts.Length)
+                System.Array.Resize(ref supportedLoadContacts, supportedLoadContacts.Length * 2);
+            return count;
+        }
+
+        private void GatherSupportedLoads()
+        {
+            int count = QuerySupportedLoadContacts();
+            float middle = shape.bounds.center.y;
+            for (int i = 0; i < count; i++)
+            {
+                var load = supportedLoadContacts[i].attachedRigidbody;
+                var box = load ? load.GetComponent<BoxCollider>() : null;
+                if (!box || box.bounds.min.y < middle) continue; // Floor-standing chairs are not cargo.
+                Vector3 center = transform.InverseTransformPoint(box.bounds.center) - shape.center;
+                if (Mathf.Abs(center.x) <= shape.size.x * .5f && Mathf.Abs(center.z) <= shape.size.z * .5f)
+                    PrepareSupportedLoad(load);
+            }
+        }
+
+        private void RefreshSupportedLoads()
+        {
+            if (supportedLoads.Count == 0) return;
+            Quaternion inverse = Quaternion.Inverse(Rigidbody.rotation);
+            Vector3 center = PhysicsPoint(shape.center);
+            Vector3 extent = Vector3.Scale(shape.size * .5f, transform.lossyScale);
+            for (int i = supportedLoads.Count - 1; i >= 0; i--)
+            {
+                var load = supportedLoads[i];
+                var item = load ? load.GetComponent<Liftable>() : null;
+                var box = load ? load.GetComponent<BoxCollider>() : null;
+                var bounds = box ? box.bounds : new Bounds();
+                Vector3 local = inverse * (bounds.center - center);
+                Vector3 radius = Abs(inverse * Vector3.right) * bounds.extents.x +
+                    Abs(inverse * Vector3.up) * bounds.extents.y + Abs(inverse * Vector3.forward) * bounds.extents.z;
+                // A load can briefly bounce above the surface at the end of a lift.
+                // Release it when it leaves the footprint or falls below the table.
+                bool supported = local.y >= 0f && Mathf.Abs(local.x) <= extent.x + radius.x &&
+                    Mathf.Abs(local.z) <= extent.z + radius.z;
+                if (box && item && item.isActiveAndEnabled && !item.IsLifted && supported) continue;
+                for (int pair = ignoredCollisions.Count - 1; pair >= 0; pair--)
+                    if (!ignoredCollisions[pair].a || ignoredCollisions[pair].a.attachedRigidbody == load)
+                    {
+                        var contact = ignoredCollisions[pair];
+                        if (contact.a && contact.b) Physics.IgnoreCollision(contact.a, contact.b, false);
+                        ignoredCollisions.RemoveAt(pair);
+                    }
+                supportedLoads.RemoveAt(i);
+            }
+        }
+
+        private static Vector3 Abs(Vector3 value) => new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
 
         private float MoveObjectPose(Vector3 position, Quaternion rotation)
         {
@@ -148,7 +244,7 @@ namespace TA.AdaptiveAnimation
             foreach (var holder in Holders)
                 if (holder is InteractionController actor && actor.IsPlacingDown) return;
             state = Holders.Count == 2 ? CooperativeCarryState.Aligning : CooperativeCarryState.WaitingForPartner;
-            if (Holders.Count == 1) BeginSoloTilt();
+            pendingSoloTilt = false;
         }
         public Vector3 GetEffortDirection(InteractionController player) =>
             player == frontHolder ? frontEffort : player == backHolder ? backEffort : Vector3.zero;
@@ -231,6 +327,7 @@ namespace TA.AdaptiveAnimation
                         Physics.IgnoreCollision(a, b, true);
                         ignoredCollisions.Add((a, b));
                     }
+            foreach (var load in supportedLoads) PrepareSupportedLoad(load);
         }
 
         protected override void OnFirstPickup()
@@ -253,6 +350,7 @@ namespace TA.AdaptiveAnimation
             Rigidbody.useGravity = false;
             Rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
             Rigidbody.constraints = RigidbodyConstraints.None;
+            GatherSupportedLoads();
             BeginSoloTilt();
         }
 
@@ -274,6 +372,13 @@ namespace TA.AdaptiveAnimation
             float angle = (Mathf.Asin(Mathf.Clamp(rise / Mathf.Max(.001f, radius), -1f, 1f)) -
                 Mathf.Atan2(halfHeight, length)) * Mathf.Rad2Deg;
             Quaternion tilt = levelRotation * Quaternion.Euler(-sign * Mathf.Clamp(angle, 0f, maximumSoloTilt), 0f, 0f);
+            if (supportedLoads.Count > 0)
+            {
+                soloLocalPivot = localPivot;
+                soloTiltTarget = tilt;
+                pendingSoloTilt = true;
+                return;
+            }
             SetObjectPoseAroundPivot(soloPivot, localPivot, tilt);
         }
 
@@ -284,6 +389,10 @@ namespace TA.AdaptiveAnimation
             backGap = stanceGap;
             state = Holders.Count == 2 ? CooperativeCarryState.Aligning : CooperativeCarryState.WaitingForPartner;
             if (Holders.Count != 2) return;
+            pendingSoloTilt = false;
+            // A loaded table must rise through the fixed-step lift below. Snapping
+            // to carry height can eject its computers before PhysX can support them.
+            if (supportedLoads.Count > 0) return;
             // Attach at the second grab event, not after the rest of the pickup clip.
             Vector3 end = PhysicsPoint(EndLocal(firstRole));
             Vector3 position = end - levelRotation * Vector3.Scale(EndLocal(firstRole), transform.lossyScale);
@@ -331,16 +440,24 @@ namespace TA.AdaptiveAnimation
             if (player == frontHolder) frontHolder = null;
             if (player == backHolder) backHolder = null;
             base.Drop(holder);
-            if (releasing) return;
-            // A release by either person puts the object down for both; no abandoned joint/role.
-            releasing = true;
-            try
+            if (player)
             {
-                var remaining = Holders.ToArray();
-                foreach (var other in remaining)
-                    if (other is InteractionController partner && partner) partner.ReleaseHeldObject();
+                for (int i = ignoredCollisions.Count - 1; i >= 0; i--)
+                {
+                    var pair = ignoredCollisions[i];
+                    if (!pair.b || !pair.b.transform.IsChildOf(player.transform)) continue;
+                    if (pair.a) Physics.IgnoreCollision(pair.a, pair.b, false);
+                    ignoredCollisions.RemoveAt(i);
+                }
             }
-            finally { releasing = false; }
+            motionGuard = null;
+            if (Holders.Count == 1)
+            {
+                firstRole = frontHolder ? CarryRole.Front : CarryRole.Back;
+                state = CooperativeCarryState.WaitingForPartner;
+                frontEffort = backEffort = Vector3.zero;
+                pendingSoloTilt = false;
+            }
         }
 
         protected override void OnAllDropped()
@@ -348,6 +465,8 @@ namespace TA.AdaptiveAnimation
             foreach (var pair in ignoredCollisions)
                 if (pair.a && pair.b) Physics.IgnoreCollision(pair.a, pair.b, false);
             ignoredCollisions.Clear();
+            supportedLoads.Clear();
+            pendingSoloTilt = false;
             Rigidbody.isKinematic = dynamicOnRelease ? false : savedKinematic;
             Rigidbody.useGravity = dynamicOnRelease || savedGravity;
             Rigidbody.interpolation = savedInterpolation;
@@ -381,6 +500,7 @@ namespace TA.AdaptiveAnimation
             SampleMotion();
             frontEffort = backEffort = Vector3.zero;
             if (Holders.Count == 0) return;
+            RefreshSupportedLoads();
             foreach (var holder in Holders)
                 if (holder is InteractionController placing && placing.IsPlacingDown) return;
             if (state != CooperativeCarryState.Carrying && frontHolder) Align(frontHolder, CarryRole.Front);
@@ -389,7 +509,17 @@ namespace TA.AdaptiveAnimation
             {
                 var solo = frontHolder ? frontHolder : backHolder;
                 if (solo && !solo.IsPickingUp)
+                {
+                    if (pendingSoloTilt)
+                    {
+                        Quaternion next = Quaternion.RotateTowards(Rigidbody.rotation, soloTiltTarget,
+                            levelingDegreesPerSecond * Time.fixedDeltaTime);
+                        float allowed = MoveObjectPose(soloPivot - next * Vector3.Scale(soloLocalPivot, transform.lossyScale), next);
+                        pendingSoloTilt = allowed >= .999f && Quaternion.Angle(Rigidbody.rotation, soloTiltTarget) > .1f;
+                        return;
+                    }
                     MoveSolo(solo.GetComponent<ThirdPersonPlayerController>().RequestedMove);
+                }
                 return;
             }
             var front = frontHolder.GetComponent<ThirdPersonPlayerController>();
@@ -759,6 +889,7 @@ namespace TA.AdaptiveAnimation
                     (backHolder && hit.collider.transform.IsChildOf(backHolder.transform))) continue;
                 // Tangential contact with the floor should not block horizontal movement.
                 if (Vector3.Dot(hit.normal, delta / distance) >= -.01f) continue;
+                if (hit.rigidbody && supportedLoads.Contains(hit.rigidbody)) continue;
                 distance = Mathf.Min(distance, Mathf.Max(0f, hit.distance - .02f));
             }
             return delta.normalized * distance;

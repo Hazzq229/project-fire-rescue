@@ -6,6 +6,10 @@ namespace TA.AdaptiveAnimation
     [DisallowMultipleComponent]
     public sealed class BoxGripProvider : GripPointProvider
     {
+        public enum GripFitMode { AutoFit = 0, Manual = 1 }
+
+        [Tooltip("Auto Fit mempertahankan kontak permukaan otomatis. Manual memakai tinggi/kedalaman Inspector pada bounds collider; collider tetap mengikuti geometri visual untuk tabrakan.")]
+        [SerializeField] private GripFitMode fitMode = GripFitMode.AutoFit;
         [SerializeField] private BoxCollider boxCollider;
         [Tooltip("0 = bawah kardus; 1 = atas kardus.")]
         [SerializeField, Range(0f, 1f)] private float gripHeight = 0.5f;
@@ -38,6 +42,11 @@ namespace TA.AdaptiveAnimation
         private Vector4 cachedGripSettings;
         private readonly List<float> intersections = new List<float>();
         public bool HasSurfaceGeometry => surface.Length > 0 && !geometryUnavailable;
+        private bool hasVisualBounds;
+        public GripFitMode FitMode => fitMode;
+        public float EffectiveGripHeight => fitMode == GripFitMode.AutoFit && hasVisualBounds
+            ? (surfaceBounds.size.y * transform.lossyScale.y < 1f ? .85f : .08f) : gripHeight;
+        public float EffectiveGripDepth => fitMode == GripFitMode.AutoFit && hasVisualBounds ? 0f : gripDepth;
 
         private void Awake()
         {
@@ -93,10 +102,8 @@ namespace TA.AdaptiveAnimation
             {
                 boxCollider.center = bounds.center;
                 boxCollider.size = bounds.size;
-                gripDepth = 0f;
-                if (bounds.size.y * transform.lossyScale.y < 1f) gripHeight = .85f;
-                else gripHeight = .08f;
                 surfaceBounds = bounds;
+                hasVisualBounds = true;
             }
             surface = triangles.ToArray();
         }
@@ -121,15 +128,17 @@ namespace TA.AdaptiveAnimation
             if (size.x <= 0f || size.y <= 0f || size.z <= 0f) return false;
 
             Vector3 center = boxCollider.center;
-            if (geometryUnavailable) return false;
-            if (HasSurfaceGeometry)
+            float height = EffectiveGripHeight;
+            float depth = EffectiveGripDepth;
+            if (fitMode == GripFitMode.AutoFit && geometryUnavailable) return false;
+            if (fitMode == GripFitMode.AutoFit && HasSurfaceGeometry)
             {
-                var settings = new Vector4(gripHeight, maximumHalfSpacing,
-                    Mathf.Abs(boxCollider.transform.lossyScale.x), gripDepth);
+                var settings = new Vector4(height, maximumHalfSpacing,
+                    Mathf.Abs(boxCollider.transform.lossyScale.x), depth);
                 if (!gripCached || cachedGripSettings != settings)
                 {
                     cachedGripSettings = settings;
-                    cachedGripValid = FindSurfaceGrips(out cachedA, out cachedB);
+                    cachedGripValid = FindSurfaceGrips(height, out cachedA, out cachedB);
                     gripCached = true;
                 }
                 if (!cachedGripValid) return false;
@@ -137,11 +146,11 @@ namespace TA.AdaptiveAnimation
                 pointB = boxCollider.transform.TransformPoint(cachedB);
                 return true;
             }
-            float y = center.y + (gripHeight - 0.5f) * size.y;
-            float z = center.z + (gripDepth - 0.5f) * size.z;
+            float y = center.y + (height - 0.5f) * size.y;
+            float z = center.z + (depth - 0.5f) * size.z;
             float halfWidth = size.x * .5f;
             // Broad furniture is held on its near face, not at unreachable outer corners.
-            if (gripDepth <= .001f)
+            if (depth <= .001f)
                 halfWidth = Mathf.Min(halfWidth, maximumHalfSpacing / Mathf.Max(.0001f, boxCollider.transform.lossyScale.x));
             pointA = boxCollider.transform.TransformPoint(
                 new Vector3(center.x - halfWidth, y, z));
@@ -150,10 +159,10 @@ namespace TA.AdaptiveAnimation
             return true;
         }
 
-        private bool FindSurfaceGrips(out Vector3 a, out Vector3 b)
+        private bool FindSurfaceGrips(float height, out Vector3 a, out Vector3 b)
         {
             a = b = Vector3.zero;
-            float desiredY = Mathf.Lerp(surfaceBounds.min.y, surfaceBounds.max.y, gripHeight);
+            float desiredY = Mathf.Lerp(surfaceBounds.min.y, surfaceBounds.max.y, height);
             float scaleX = Mathf.Max(.0001f, Mathf.Abs(boxCollider.transform.lossyScale.x));
             float startWidth = Mathf.Min(surfaceBounds.extents.x * .98f, maximumHalfSpacing / scaleX);
             float minimumWidth = Mathf.Min(startWidth, .14f / scaleX);

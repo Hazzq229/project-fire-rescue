@@ -54,4 +54,4 @@ These SHA-256 hashes match task-start snapshots. This task did not alter these a
 
 ## Limits and maintenance
 
-These are Editor Play Mode results, not standalone-build validation or a subjective naturalness study. The head follows its pose rigidly; these source meshes have no facial blendshapes. If the replacement FBX changes or the model-replacement Apply command rebuilds CharacterAppearance, regenerate and rebind the rigid-head meshes before saving the prefab. This task did not expand that separate authoring workflow.
+These are Editor Play Mode results, not standalone-build validation or a subjective naturalness study. The head follows its pose rigidly; these source meshes have no facial blendshapes. At the time of this verification, Apply Model did not reproduce the rigid-head setup. The 15 November follow-up now preserves its authored bindings across same-model Apply, Restore and prefab reload; see [model replacement workflow](Character-Model-Replacement.md). Changing the source model/dependencies or headgear calibration still requires rebuilt calibrated meshes.

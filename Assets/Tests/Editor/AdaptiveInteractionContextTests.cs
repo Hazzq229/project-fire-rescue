@@ -82,6 +82,65 @@ public class AdaptiveInteractionContextTests
     }
 
     [UnityTest]
+    public IEnumerator RepeatedReadsReuseResultsAndBindingsWithoutDelayingLiveChanges()
+    {
+        EditorSceneManager.OpenScene(Scene); yield return new EnterPlayMode(); yield return Ready();
+        TestFloor();
+        var player = GameObject.Find("Player1"); var actor = Actor(player); var manager = Manager(player);
+        var computer = GameObject.Find("Carry_Props_Computer_01");
+        var item = C(computer, "HInteractions.Liftable");
+        var load = C(computer, Prefix + "CarryAnimationLoad");
+        var provider = C(computer, Prefix + "ScenePropGripProvider");
+        Position(player, new Vector3(30f, .35f, 28f), Quaternion.identity);
+        Position(GameObject.Find("Player2"), new Vector3(35f, .35f, 28f), Quaternion.identity);
+        Position(computer, new Vector3(30f, .75f, 28.65f), Quaternion.identity);
+        yield return Wait(.3f);
+        Call(actor, "BeginPickup", item);
+        for (float until = Time.time + 4f; P(actor, "HeldObject") == null && Time.time < until;) yield return null;
+        Assert.AreSame(item, P(actor, "HeldObject"));
+        var pickupSnapshot = Context(manager);
+        Assert.IsTrue((bool)P(pickupSnapshot, "IsPickingUp"), "Capture between grab and pickup completion");
+        Assert.AreEqual("Base Layer.Pickup", P(Result(manager), "AnimationStateHint"));
+        Call(actor, "NotifyPickupExited");
+        Assert.AreEqual("Carry Layer.CarryHold", P(Result(manager), "AnimationStateHint"), "Completion is visible without a yield");
+        var processor = T(Prefix + "ProceduralLayerProcessor").GetMethod("Process");
+        Assert.AreEqual("Base Layer.Pickup", P(processor.Invoke(null, new[] { pickupSnapshot }), "AnimationStateHint"),
+            "Routing a saved snapshot must not consult the actor's changed pickup flag");
+        int frame = Time.frameCount;
+        int revision = (int)P(manager, "ContextRevision"), bindings = (int)P(manager, "BindingRefreshCount");
+        for (int i = 0; i < 100; i++) { Context(manager); Result(manager); Call(manager, "Update"); }
+        Assert.AreEqual(revision, P(manager, "ContextRevision"), "Unchanged readers/Update share one published result");
+        Assert.AreEqual(bindings, P(manager, "BindingRefreshCount"), "Unchanged reads do not repeat component discovery");
+        Call(load, "Configure", 41f);
+        Assert.AreEqual(41f, P(Context(manager), "ObjectWeightKg"));
+        Assert.AreEqual(revision + 1, P(manager, "ContextRevision"));
+        var shape = computer.GetComponent<BoxCollider>(); var size = shape.size;
+        shape.size += Vector3.right * .03f;
+        Assert.That(((Vector3)P(Context(manager), "ObjectSize")).x,
+            Is.EqualTo((size.x + .03f) * Mathf.Abs(shape.transform.lossyScale.x)).Within(.00001f));
+        computer.transform.localScale = new Vector3(1.1f, 1f, 1f);
+        Assert.That(((Vector3)P(Context(manager), "ObjectSize")).x, Is.EqualTo((size.x + .03f) * 1.1f).Within(.00001f));
+        ((Behaviour)provider).enabled = false;
+        Assert.IsNull(P(Result(manager), "GripProvider"));
+        ((Behaviour)provider).enabled = true;
+        Assert.AreSame(provider, P(Result(manager), "GripProvider"));
+        ((Behaviour)load).enabled = false;
+        Assert.IsFalse((bool)P(Result(manager), "HasLoad"));
+        ((Behaviour)load).enabled = true;
+        Assert.AreEqual(41f, P(Result(manager), "EffectiveWeightKg"));
+        Assert.AreEqual(bindings, P(manager, "BindingRefreshCount"));
+        Assert.AreEqual(frame, Time.frameCount, "All invalidation assertions happen in the same frame");
+        revision = (int)P(manager, "ContextRevision");
+        Call(manager, "RefreshContext");
+        Assert.AreEqual(bindings + 1, P(manager, "BindingRefreshCount"));
+        Assert.AreEqual(revision, P(manager, "ContextRevision"), "Forced rebind need not republish identical data");
+        yield return null;
+        Context(manager);
+        Assert.Greater((int)P(manager, "BindingRefreshCount"), bindings + 1, "Next frame checks structural changes");
+        Debug.Log("CONTEXT CACHE: 100 Context + 100 Result + 100 Update reads reused result/bindings; same-frame load, size, scale, provider and pickup changes refreshed immediately.");
+    }
+
+    [UnityTest]
     public IEnumerator ComputerContextTracksPickupContactLoadAndLegacyFallback()
     {
         EditorSceneManager.OpenScene(Scene); yield return new EnterPlayMode(); yield return Ready();
@@ -200,8 +259,12 @@ public class AdaptiveInteractionContextTests
             HoseCheck("CheckMovingContacts", manager.gameObject);
         }
         Call(a, "BeginPlaceDown");
-        Assert.IsTrue((bool)P(a, "IsPlacingDown")); Assert.IsTrue((bool)P(b, "IsPlacingDown"));
-        foreach (var manager in new[] { m1, m2 })
+        Assert.IsNull(P(a, "HeldObject")); Empty(m1);
+        Assert.AreSame(team, P(b, "HeldObject"));
+        Assert.That((float)P(Result(m2), "EffectiveWeightKg"), Is.EqualTo(60f).Within(.001f));
+        Call(b, "BeginPlaceDown");
+        Assert.IsFalse((bool)P(a, "IsPlacingDown")); Assert.IsTrue((bool)P(b, "IsPlacingDown"));
+        foreach (var manager in new[] { m2 })
         {
             Expect(Context(manager), "Phase", "Placing");
             Assert.AreEqual("Base Layer.Pickup", P(Result(manager), "BaseAnimationState"));

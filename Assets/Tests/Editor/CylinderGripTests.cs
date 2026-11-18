@@ -275,6 +275,47 @@ public class CylinderGripTests
     }
 
     [UnityTest]
+    public IEnumerator SavedExtinguisherSpraysAndExtinguishesWithWallAndDropProtection()
+    {
+        EditorSceneManager.OpenScene(Scene); yield return new EnterPlayMode(); yield return Ready();
+        var item = GameObject.Find("Prop_FireExtinguisher"); var provider = Provider(item);
+        var water = C(item, "HGame.Objects.HoseWaterController");
+        var origin = (Transform)F(water, "raycastOrigin");
+        Assert.IsNotNull(origin, "The saved extinguisher needs a muzzle for its extinguishing ray");
+        var effect = (Component)F(water, "waterFX");
+        Assert.IsNotNull(effect);
+        Assert.IsNotNull(P(effect, "visualEffectAsset"), "The saved spray component needs its VFX graph");
+        var player = GameObject.Find("Player1"); var actor = Actor(player);
+        Position(player, new Vector3(30f, .35f, 28f), Quaternion.identity);
+        Position(GameObject.Find("Player2"), new Vector3(35f, .35f, 28f), Quaternion.identity);
+        Position(item, new Vector3(30f, .8f, 28.55f), item.transform.rotation);
+        yield return Wait(.3f); yield return Pickup(player, item, provider);
+        CheckContacts(player, item, provider);
+        Assert.Greater(Vector3.Dot(Vector3.ProjectOnPlane(origin.forward, Vector3.up).normalized, player.transform.forward), .9f,
+            "The held extinguisher must spray in front of its operator");
+        var target = new GameObject("Extinguisher audit target fire");
+        target.transform.position = origin.position + origin.forward * 1.1f - Vector3.up * .06f;
+        var fireShape = target.AddComponent<BoxCollider>(); fireShape.size = Vector3.one * .5f; fireShape.isTrigger = true;
+        var fire = target.AddComponent(T("Fire"));
+        var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        wall.name = "Extinguisher audit wall";
+        wall.transform.SetPositionAndRotation(origin.position + origin.forward * .45f, Quaternion.LookRotation(origin.forward));
+        wall.transform.localScale = new Vector3(1f, 1f, .04f); Physics.SyncTransforms();
+        Keys("G"); yield return Wait(.08f); Keys(); yield return Wait(.3f);
+        Assert.IsTrue((bool)P(water, "IsShooting"), "The real Tool input must start spraying");
+        Assert.That((float)Call(fire, "GetIntensity"), Is.EqualTo(1f).Within(.0001f), "A wall must block extinguishing");
+        UnityEngine.Object.Destroy(wall); yield return Wait(.5f);
+        Assert.Less((float)Call(fire, "GetIntensity"), .9f, "The saved tool must reduce an unobstructed fire");
+        Assert.Greater(Convert.ToUInt32(P(effect, "aliveParticleCount")), 0u, "The assigned graph must emit a visible spray");
+        CheckContacts(player, item, provider);
+        CooperativeHoseTests.Capture("Temp/Extinguisher-Bug-Audit-2026-11-16.png", player.transform.position + Vector3.up * .4f);
+        Call(actor, "ReleaseHeldObject"); yield return Wait(.15f);
+        Assert.IsFalse((bool)P(water, "IsShooting"), "Dropping the extinguisher must stop spraying");
+        Assert.IsFalse((bool)P(actor, "ExternalInteractionLocked"));
+        UnityEngine.Object.Destroy(target);
+    }
+
+    [UnityTest]
     public IEnumerator CylinderProviderDisableAndPlacementPreserveToolCleanup()
     {
         EditorSceneManager.OpenScene(Scene); yield return new EnterPlayMode(); yield return Ready();

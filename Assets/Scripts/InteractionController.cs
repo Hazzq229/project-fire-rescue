@@ -259,6 +259,11 @@ namespace HPlayer
         private void FinishPickup()
         {
             var retainedPlacement = IsPlacingDown ? HeldObject : null;
+            if (retainedPlacement is TA.AdaptiveAnimation.CooperativeCarryObject && retainedPlacement.Holders.Count == 1)
+            {
+                PlacementPosition = placementStart;
+                ApplyPlacementPosition();
+            }
             // A refused/interrupted placement retains ownership. Never force an
             // obstructed object into its final pose or drop it from mid-air.
             if (IsPlacingDown && HeldObject && !(HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject))
@@ -411,6 +416,13 @@ namespace HPlayer
         {
             if (HeldObject is TA.AdaptiveAnimation.CooperativeHoseGrip && !IsPickingUp)
             { ReleaseHeldObject(); return; }
+            // A partner still supports the load: release only this player's grip.
+            // The final holder continues through the normal guarded placement.
+            if (HeldObject is TA.AdaptiveAnimation.CooperativeCarryObject && HeldObject.Holders.Count > 1)
+            {
+                if (!IsPickingUp && !ExternalInteractionLocked) ReleaseHeldObject();
+                return;
+            }
             if (!HeldObject || IsPickingUp || ExternalInteractionLocked || !animator ||
                 !animator.HasState(0, PickupStateId)) return;
             var holders = HeldObject.Holders.ToArray();

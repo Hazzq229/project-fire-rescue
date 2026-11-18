@@ -19,6 +19,8 @@ namespace TA.AdaptiveAnimation
         {
             public Rigidbody body;
             public ShapeState[] shapes;
+            public Collider[] triggers;
+            public bool boxOnly;
             public Vector3 position;
             public Quaternion rotation;
             public float radius;
@@ -35,20 +37,33 @@ namespace TA.AdaptiveAnimation
 
         private readonly BodyState[] states;
         private Collider[] overlaps = new Collider[32];
+        private readonly ICollection<Rigidbody> supportedLoads;
 
-        public CarryMotionGuard(params Rigidbody[] bodies)
+        public CarryMotionGuard(params Rigidbody[] bodies) : this(null, bodies) { }
+
+        public CarryMotionGuard(ICollection<Rigidbody> supportedLoads, params Rigidbody[] bodies)
         {
+            this.supportedLoads = supportedLoads;
             if (bodies == null) throw new ArgumentNullException(nameof(bodies));
             states = new BodyState[bodies.Length];
             for (int i = 0; i < bodies.Length; i++)
             {
                 var body = bodies[i];
                 var shapes = new List<ShapeState>();
+                var triggers = new List<Collider>();
+                bool boxOnly = true;
                 if (body)
                     foreach (var collider in body.GetComponentsInChildren<Collider>(true))
-                        if (collider.enabled && !collider.isTrigger && collider.attachedRigidbody == body)
-                            shapes.Add(new ShapeState { collider = collider });
-                states[i] = new BodyState { body = body, shapes = shapes.ToArray() };
+                        if (collider.attachedRigidbody == body)
+                        {
+                            if (collider.isTrigger) triggers.Add(collider);
+                            else if (collider.enabled)
+                            {
+                                shapes.Add(new ShapeState { collider = collider });
+                                boxOnly &= collider is BoxCollider;
+                            }
+                        }
+                states[i] = new BodyState { body = body, shapes = shapes.ToArray(), triggers = triggers.ToArray(), boxOnly = boxOnly };
             }
         }
 
@@ -151,6 +166,33 @@ namespace TA.AdaptiveAnimation
                 float distance = delta.magnitude;
                 if (distance < .000001f) continue;
                 Vector3 direction = delta / distance;
+                // Rigidbody sweeps cast attached triggers too; Ignore only filters
+                // target triggers. Box compounds can sweep their actual solids
+                // directly, without disabling the interaction volumes or changing
+                // the existing exact compound sweep for other collider types.
+                bool hasTrigger = false;
+                foreach (var trigger in state.triggers) hasTrigger |= Active(trigger);
+                if (state.boxOnly && hasTrigger)
+                {
+                    foreach (var shape in state.shapes)
+                    {
+                        if (!Active(shape.collider)) continue;
+                        var box = (BoxCollider)shape.collider;
+                        Vector3 scale = box.transform.lossyScale;
+                        scale = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+                        foreach (var hit in Physics.BoxCastAll(state.position + state.rotation * shape.localCenter,
+                            Vector3.Scale(box.size * .5f, scale), direction, state.rotation * shape.localRotation,
+                            distance + Skin, ~0, QueryTriggerInteraction.Ignore))
+                        {
+                            // Initial overlaps are governed by the sampled depth
+                            // checks, so an existing contact can still retreat.
+                            if (Ignore(box, hit.collider) || shape.initialDepths.ContainsKey(hit.collider) ||
+                                Vector3.Dot(hit.normal, direction) >= -.01f) continue;
+                            fraction = Mathf.Min(fraction, Mathf.Max(0f, hit.distance - Skin) / distance);
+                        }
+                    }
+                    continue;
+                }
                 foreach (var hit in state.body.SweepTestAll(direction, distance + Skin, QueryTriggerInteraction.Ignore))
                 {
                     // Support contacts tangential to travel must not freeze the group.
@@ -214,6 +256,8 @@ namespace TA.AdaptiveAnimation
         private bool Ignore(Collider own, Collider other)
         {
             if (!Active(other) || other.isTrigger || other == own) return true;
+            // Loads on the tabletop remain solid in PhysX and ride on its surface.
+            if (supportedLoads != null && other.attachedRigidbody && supportedLoads.Contains(other.attachedRigidbody)) return true;
             foreach (var state in states)
                 if (state.body && other.transform.IsChildOf(state.body.transform)) return true;
             return Physics.GetIgnoreLayerCollision(own.gameObject.layer, other.gameObject.layer) ||

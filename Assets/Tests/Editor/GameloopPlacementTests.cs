@@ -137,6 +137,101 @@ public class GameloopPlacementTests
     }
 
     [UnityTest]
+    public IEnumerator LampCanBePlacedByBothPlayersWithItsInteractionTriggerEnabled()
+    {
+        EditorSceneManager.OpenScene("Assets/Scenes/Gameloop_Demo.unity"); yield return new EnterPlayMode();
+        yield return VerifyLampPlacement();
+    }
+
+    static IEnumerator VerifyLampPlacement()
+    {
+        yield return Wait(.3f);
+        var adapter = UnityEngine.Object.FindObjectOfType(T("TA.AdaptiveAnimation.AdaptiveSceneProps"));
+        Assert.IsNotNull(adapter);
+        for (float end = Time.time + 5f; !(bool)P(adapter, "IsReady") && Time.time < end;)
+            yield return null;
+        Assert.IsTrue((bool)P(adapter, "IsReady"));
+        var item = GameObject.Find("Carry_Adaptive_Lamp");
+        Assert.IsNotNull(item, "Use the adapted carry root, not the visual's old Liftable scheduled for destruction");
+        var lamp = C(item, "HInteractions.Liftable"); var body = item.GetComponent<Rigidbody>();
+        Assert.IsTrue(lamp && body);
+        Vector3 origin = body.position; Quaternion rotation = body.rotation;
+        var trigger = item.GetComponent<BoxCollider>();
+        Assert.IsTrue(trigger.enabled && trigger.isTrigger);
+        foreach (int slot in new[] { 0, 1 })
+        {
+            body.isKinematic = true;
+            Position(item, origin, rotation);
+            var actor = Actor(slot == 0 ? "Player1" : "Player2");
+            Position(GameObject.Find(slot == 0 ? "Player2" : "Player1"), new Vector3(30f, .35f, 30f), Quaternion.identity);
+            Position(actor.gameObject, new Vector3(origin.x, .35f, origin.z - .65f), Quaternion.identity);
+            Call(actor, "BeginPickup", lamp);
+            yield return Wait(3f);
+            Assert.AreSame(lamp, P(actor, "HeldObject"), "Real pickup animation must acquire the saved scene lamp");
+            Unlocked(actor);
+            var carried = SolidBounds(item);
+            var floor = Physics.RaycastAll(carried.center, Vector3.down, 3f, ~0, QueryTriggerInteraction.Ignore)
+                .Where(h => !h.collider.transform.IsChildOf(item.transform) && !h.collider.GetComponentInParent(T("HPlayer.InteractionController")))
+                .OrderBy(h => h.distance).First().collider;
+            typeof(CooperativeHoseTests).GetMethod("KeyboardState", BindingFlags.Static | BindingFlags.NonPublic)
+                .Invoke(null, new object[] { new[] { slot == 0 ? "F" : "RightCtrl" } });
+            yield return Wait(.1f);
+            typeof(CooperativeHoseTests).GetMethod("KeyboardState", BindingFlags.Static | BindingFlags.NonPublic)
+                .Invoke(null, new object[] { new string[0] });
+            Assert.IsTrue((bool)P(actor, "IsPlacingDown"), actor.name + " grab input must start lamp placement");
+            float worstDepth = 0f;
+            for (float end = Time.time + 4f; Time.time < end;)
+            {
+                yield return null;
+                worstDepth = Mathf.Max(worstDepth, Penetration(item, floor));
+            }
+            Assert.IsNull(P(actor, "HeldObject"));
+            Assert.IsFalse((bool)P(lamp, "IsLifted"));
+            Assert.IsFalse(body.isKinematic);
+            Assert.IsTrue(trigger.enabled && trigger.isTrigger, "Interaction trigger remains available after placement");
+            Assert.Less(worstDepth, .008f, "Physical lamp colliders must not pass through the authored floor");
+            Unlocked(actor);
+            Debug.Log("LAMP PLACEMENT " + actor.name + " floor overlap=" + worstDepth);
+        }
+    }
+
+    [Test]
+    public void TriggerCompoundSweepsOnlySolidsAndStillStopsAtThinWalls()
+    {
+        var item = new GameObject("TriggerSweepFixture");
+        var floor = Box("TriggerSweepFloor", new Vector3(100f, -.1f, 100f), new Vector3(4f, .2f, 4f));
+        BoxCollider wall = null;
+        try
+        {
+            var body = item.AddComponent<Rigidbody>(); body.isKinematic = true;
+            var trigger = item.AddComponent<BoxCollider>(); trigger.size = Vector3.one * 2f; trigger.isTrigger = true;
+            var solid = new GameObject("Solid"); solid.transform.SetParent(item.transform, false);
+            var shape = solid.AddComponent<BoxCollider>(); shape.size = Vector3.one * .2f;
+            Position(item, new Vector3(100f, 1.2f, 100f), Quaternion.identity);
+            var guard = Activator.CreateInstance(T("TA.AdaptiveAnimation.CarryMotionGuard"), new object[] { new[] { body } });
+            Func<Vector3, float> fraction = target => (float)Call(guard, "Limit", new[] { target }, new[] { Quaternion.identity });
+            Assert.That(fraction(new Vector3(100f, .3f, 100f)), Is.EqualTo(1f), "Interaction volume must not block valid solid clearance");
+            Assert.IsTrue(trigger.enabled);
+            Position(item, new Vector3(100f, .3f, 100f), Quaternion.identity);
+            wall = Box("ThinSolidWall", new Vector3(100.5f, .3f, 100f), new Vector3(.001f, 2f, 2f));
+            float limited = fraction(new Vector3(101f, .3f, 100f));
+            Assert.That(limited, Is.InRange(.35f, .401f), "A wall thinner than penetration sample spacing must still stop the real solid");
+            Physics.IgnoreCollision(shape, wall);
+            Assert.That(fraction(new Vector3(101f, .3f, 100f)), Is.EqualTo(1f), "Existing collision exclusions remain respected");
+            Position(item, new Vector3(100f, .099f, 100f), Quaternion.identity);
+            Assert.That(fraction(new Vector3(100f, .3f, 100f)), Is.EqualTo(1f), "A slight existing floor overlap must allow upward recovery");
+            Assert.That(fraction(new Vector3(100.2f, .099f, 100f)), Is.EqualTo(1f), "Existing support overlap must allow tangential travel");
+            Assert.Less(fraction(new Vector3(100f, .05f, 100f)), .001f, "Deeper penetration remains blocked");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(item);
+            UnityEngine.Object.DestroyImmediate(floor.gameObject);
+            if (wall) UnityEngine.Object.DestroyImmediate(wall.gameObject);
+        }
+    }
+
+    [UnityTest]
     public IEnumerator ComputerPlacementNearWallStaysAboveFloor()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/Gameloop_Demo.unity"); yield return new EnterPlayMode();
@@ -151,7 +246,7 @@ public class GameloopPlacementTests
     }
 
     [UnityTest]
-    public IEnumerator CooperativeTablePlacementNearWallReleasesBothSafely()
+    public IEnumerator CooperativeTableLastHolderPlacementNearWallReleasesSafely()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/Gameloop_Demo.unity"); yield return new EnterPlayMode();
         yield return Wait(.3f);
@@ -161,7 +256,13 @@ public class GameloopPlacementTests
         var bounds = SolidBounds(table);
         var wall = Box("PlacementTestWall", new Vector3(bounds.max.x + .03f, 1f, bounds.center.z), new Vector3(.04f, 3f, 8f));
         Assert.Less(Penetration(table, wall), .001f);
-        yield return VerifyPlacement(table, Actor("Player1"), Actor("Player2"), floor, wall);
+        Call(Actor("Player1"), "BeginPlaceDown");
+        Assert.IsNull(P(Actor("Player1"), "HeldObject"));
+        Assert.IsNotNull(P(Actor("Player2"), "HeldObject"));
+        // A released player is a world obstacle again; clear the lowering path.
+        Position(GameObject.Find("Player1"), new Vector3(35f, .35f, 30f), Quaternion.identity);
+        yield return Wait(1f);
+        yield return VerifyPlacement(table, Actor("Player2"), null, floor, wall);
     }
 
     [UnityTest]
@@ -205,7 +306,7 @@ public class GameloopPlacementTests
     }
 
     [UnityTest]
-    public IEnumerator BlockedTablePlacementRestoresBothOperatorsCarryPose()
+    public IEnumerator BlockedTableLastHolderPlacementRestoresSoloCarryPose()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/Gameloop_Demo.unity"); yield return new EnterPlayMode();
         yield return Wait(.3f);
@@ -214,6 +315,11 @@ public class GameloopPlacementTests
         var first = Actor("Player1"); var second = Actor("Player2");
         var team = C(table, "TA.AdaptiveAnimation.CooperativeCarryObject");
         Assert.AreEqual("Carrying", P(team, "State").ToString());
+        Call(first, "BeginPlaceDown");
+        Assert.IsNull(P(first, "HeldObject"));
+        Assert.IsNotNull(P(second, "HeldObject"));
+        yield return Wait(1f);
+        first = second;
         var held = P(first, "HeldObject");
         float carryHeight = table.GetComponent<Rigidbody>().position.y;
         Call(first, "BeginPlaceDown");
@@ -235,7 +341,7 @@ public class GameloopPlacementTests
         Assert.Less(worstBlock, .008f); Assert.Less(worstFloor, .008f);
         Assert.AreSame(held, P(first, "HeldObject")); Assert.AreSame(held, P(second, "HeldObject"));
         Unlocked(first); Unlocked(second);
-        Assert.AreEqual("Carrying", P(team, "State").ToString(), "Cancelled placement must resume the cooperative carry state");
+        Assert.AreEqual("WaitingForPartner", P(team, "State").ToString(), "Cancelled placement must resume solo carry");
         Assert.That(table.GetComponent<Rigidbody>().position.y, Is.EqualTo(carryHeight).Within(.03f),
             "Retaining ownership must also restore hand-height carry, not leave the table lowered");
         foreach (var actor in new[] { first, second })
