@@ -20,6 +20,7 @@
   <Project Path="Cinemachine.csproj" />
   <Project Path="Unity.VisualStudio.Editor.csproj" />
   <Project Path="Unity.Animation.Rigging.Editor.csproj" />
+  <Project Path="AdaptiveCarry.Tests.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Unity.Rider.Editor.csproj" />
   <Project Path="NaughtyAttributes.Core.csproj" />

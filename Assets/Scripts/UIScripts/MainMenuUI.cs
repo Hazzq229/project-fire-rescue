@@ -50,6 +50,7 @@ public class MainMenuUIManager : MonoBehaviour
     [Header("Pause Menu")]
     [SerializeField] private GameObject pausePanel;
     [SerializeField] private Button resumeButton;
+    [SerializeField] private Button restartButton;
     [SerializeField] private Button exitToMainMenuButton;
 
     private int selectedCharacterIndexP1;
@@ -59,23 +60,40 @@ public class MainMenuUIManager : MonoBehaviour
 
     private void Awake()
     {
-        isGameplayScene = SceneManager.GetActiveScene().name == gameplaySceneName;
+        string activeSceneName = SceneManager.GetActiveScene().name;
+        isGameplayScene = activeSceneName != mainMenuSceneName || mainMenuPanel == null;
+
         selectedCharacterIndexP1 = Mathf.Max(0, CharacterSelectionData.SelectedCharacterIndex);
         selectedCharacterIndexP2 = 0;
 
         ConnectButtons();
-        UpdateCharacterSelectionUI();
 
         if (isGameplayScene)
         {
             isPaused = false;
             Time.timeScale = 1f;
 
-            if (pausePanel != null)
+            if (pausePanel == null)
+            {
+                Debug.LogError($"[MainMenuUIManager] PausePanel belum di-assign di Inspector pada scene '{activeSceneName}'!", this);
+            }
+            else if (pausePanel == gameObject || transform.IsChildOf(pausePanel.transform))
+            {
+                Debug.LogError("[MainMenuUIManager] Jangan tempelkan script ini di dalam PausePanel! Ketika PausePanel dinonaktifkan, Update() tidak akan berjalan.", this);
+            }
+            else
+            {
                 pausePanel.SetActive(false);
+            }
+
+            if (Keyboard.current == null)
+            {
+                Debug.LogWarning("[MainMenuUIManager] Keyboard.current bernilai null. Pastikan Active Input Handling memakai New Input System dan window Game sedang fokus.", this);
+            }
         }
         else
         {
+            UpdateCharacterSelectionUI();
             ShowMainMenu();
         }
     }
@@ -101,8 +119,8 @@ public class MainMenuUIManager : MonoBehaviour
 
     private void Start()
     {
-        // EventSystem may become available after this component's Awake.
-        EnsureMenuSelection();
+        if (!isGameplayScene)
+            EnsureMenuSelection();
     }
 
     private void ConnectButtons()
@@ -120,6 +138,7 @@ public class MainMenuUIManager : MonoBehaviour
         AddListener(characterSelectBackButton, ShowMainMenu);
 
         AddListener(resumeButton, ResumeGame);
+        AddListener(restartButton, RestartGame);
         AddListener(exitToMainMenuButton, ExitToMainMenu);
     }
 
@@ -248,7 +267,6 @@ public class MainMenuUIManager : MonoBehaviour
         if (LocalCoopSession.IsJoined(1))
             LocalCoopSession.SetCharacterIndex(1, selectedCharacterIndexP2);
 
-        // Compatibility for any existing gameplay code that reads the old single-player data.
         CharacterSelectionData.SelectedCharacterIndex = selectedCharacterIndexP1;
         CharacterSelectionData.SelectedCharacterName = characterNames[selectedCharacterIndexP1];
 
@@ -372,7 +390,12 @@ public class MainMenuUIManager : MonoBehaviour
         Time.timeScale = 0f;
 
         if (EventSystem.current != null)
-            EventSystem.current.SetSelectedGameObject(null);
+        {
+            if (resumeButton != null && resumeButton.IsActive() && resumeButton.IsInteractable())
+                EventSystem.current.SetSelectedGameObject(resumeButton.gameObject);
+            else
+                EventSystem.current.SetSelectedGameObject(null);
+        }
     }
 
     public void ResumeGame()
@@ -385,6 +408,16 @@ public class MainMenuUIManager : MonoBehaviour
 
         if (pausePanel != null)
             pausePanel.SetActive(false);
+
+        if (EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(null);
+    }
+
+    public void RestartGame()
+    {
+        isPaused = false;
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     public void ExitToMainMenu()

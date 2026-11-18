@@ -1,0 +1,74 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3838266027723537277
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4237420273312651721}
+  - component: {fileID: 4436387187203096760}
+  m_Layer: 0
+  m_Name: MainMenuUIManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4237420273312651721
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3838266027723537277}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 536.7555, y: 280.40762, z: 1.5917282}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4436387187203096760
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3838266027723537277}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 901891e99c2801645b0a20439725d499, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  mainMenuPanel: {fileID: 0}
+  creditsPanel: {fileID: 0}
+  selectCharacterPanel: {fileID: 0}
+  playButton: {fileID: 0}
+  creditsButton: {fileID: 0}
+  quitButton: {fileID: 0}
+  creditsBackButton: {fileID: 0}
+  previousCharacterButton: {fileID: 0}
+  nextCharacterButton: {fileID: 0}
+  characterNameLabel: {fileID: 0}
+  player1JoinStatusLabel: {fileID: 0}
+  previousCharacterButtonP2: {fileID: 0}
+  nextCharacterButtonP2: {fileID: 0}
+  characterNameLabelP2: {fileID: 0}
+  player2JoinStatusLabel: {fileID: 0}
+  characterSelectBackButton: {fileID: 0}
+  startGameButton: {fileID: 0}
+  characterNames:
+  - Character 1
+  - Character 2
+  - Character 3
+  requireTwoPlayersToStart: 1
+  localCoopJoinManager: {fileID: 0}
+  gameplaySceneName: FR_Level_01_AnimationDemo
+  mainMenuSceneName: MainMenu
+  pausePanel: {fileID: 0}
+  resumeButton: {fileID: 0}
+  exitToMainMenuButton: {fileID: 0}
