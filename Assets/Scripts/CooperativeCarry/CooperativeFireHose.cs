@@ -52,6 +52,11 @@ namespace TA.AdaptiveAnimation
         private Vector3 rearVelocity;
         public Vector3 GetPlayerVelocity(InteractionController player) =>
             HasTeam && player == RearPlayer ? rearVelocity : GroupVelocity;
+        public Vector3 GetCarryEffort(InteractionController actor)
+        {
+            Vector3 effort = Vector3.Cross(Vector3.up, GetPlayerVelocity(actor)) * 1.4f;
+            return effort / (1f + pressure * .75f);
+        }
         public Vector3 AimDirection => Quaternion.Euler(-pitch, yaw, 0f) * Vector3.forward;
         public bool ReadyToSpray => HasTeam && !FrontPlayer.IsPickingUp && !RearPlayer.IsPickingUp;
         private Quaternion FlatRotation => Quaternion.Euler(0f, yaw, 0f);

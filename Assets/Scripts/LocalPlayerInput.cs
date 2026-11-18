@@ -45,6 +45,7 @@ namespace HPlayer
         // The existing Run binding is a one-shot dash button for both keyboard schemes.
         // Dash triggers from dedicated Dash action (gamepad buttonSouth/leftTrigger, keyboard shift/alt) or legacy Run action.
         public bool DashPressed => (GetAction("Dash")?.WasPressedThisFrame() ?? false) || (GetAction("Run")?.WasPressedThisFrame() ?? false);
+        public bool RunHeld => GetAction("Run")?.IsPressed() ?? false;
         public bool ThrowPressed => GetAction("Throw")?.WasPressedThisFrame() ?? false;
     }
 }

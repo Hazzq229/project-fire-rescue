@@ -275,6 +275,14 @@ This document records user feedback, architectural decisions, past corrections, 
 
 ## Log Entries
 
+### [2026-11-18] Branch Merge Compilation Fixes (develop into Mekanik)
+- **Context**: Merging `develop` into `Mekanik` introduced missing API references across scripts and a shader header dependency issue.
+- **Lessons & Patterns**:
+  - `LocalPlayerInput`: Added `RunHeld` back alongside `DashPressed` to maintain compatibility with movement controller scripts.
+  - `CooperativeFireHose`: Restored `GetCarryEffort(InteractionController)` required by `HeldObjectBodyLeanController.cs`.
+  - `ThirdPersonPlayerController`: Restored `LocomotionVelocity` and `UsesCarryStrideDirection` properties consumed by `CharacterModelAnimatorMirror.cs`.
+  - `WallFade.shader`: In URP 14, `Shadows.hlsl` invokes `LerpWhiteTo` which is declared in `Packages/com.unity.render-pipelines.core/ShaderLibrary/CommonMaterial.hlsl`. Added this include before `Shadows.hlsl` in the `ShadowCaster` pass.
+
 ### [2026-11-07] Large Shelf Carry and Two-Player Locomotion
 - **Feedback**: The large shelf still clipped the character, hand spacing was too wide, carrying remained too fast, Player 2 could not move, and walking looked abrupt.
 - **Rules**:
