@@ -17,9 +17,12 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/ControllerDemo.unity
     guid: b343437417235ca459efd98858717f04
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Gameloop_Demo.unity
     guid: 04af071681b076dc3a9d5610a6c6a2bb
+  - enabled: 1
+    path: Assets/Scenes/Gameloop_IJUN.unity
+    guid: 38ed0c03ccc359e44af44e8b3fe81985
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: d37b12321f2edd3468d6895b198bda2d,
       type: 3}

@@ -19,6 +19,12 @@ public class ThirdPersonPlayerController : MonoBehaviour
     private InteractionController _interaction;
     private float _animatedSpeed;
 
+    [Header("Camera Relative Settings")]
+    [SerializeField] private bool _useCameraRelativeMovement = true;
+    [SerializeField] private Transform _cameraTransform;
+    private Camera _cachedMainCamera;
+    private SplitScreenManager _splitScreenManager;
+
     private float _speedModifier = 1f;
     private Transform _lookTarget;
     private Vector2 _inputVector;
@@ -29,7 +35,27 @@ public class ThirdPersonPlayerController : MonoBehaviour
 
     public Animator CharacterAnimator => _animator;
     public float BaseMoveSpeed => _moveSpeed;
-    public Vector2 RequestedMove => !_movementLocked && _localInput ? _localInput.MoveInput : Vector2.zero;
+    public bool UseCameraRelativeMovement
+    {
+        get => _useCameraRelativeMovement;
+        set => _useCameraRelativeMovement = value;
+    }
+    public Transform CameraTransform
+    {
+        get => _cameraTransform;
+        set => _cameraTransform = value;
+    }
+    public Vector2 RequestedMove
+    {
+        get
+        {
+            if (_movementLocked || !_localInput) return Vector2.zero;
+            Vector2 raw = _localInput.MoveInput;
+            if (!_useCameraRelativeMovement) return raw;
+            Vector3 worldDir = GetCameraRelativeDirection(raw);
+            return new Vector2(worldDir.x, worldDir.z);
+        }
+    }
     public TA.AdaptiveAnimation.CooperativeCarryObject CooperativeCarry { get; set; }
     public TA.AdaptiveAnimation.CooperativeFireHose CooperativeHose { get; set; }
     private float knockbackRemaining;
@@ -120,7 +146,7 @@ public class ThirdPersonPlayerController : MonoBehaviour
             return;
         }
 
-        Vector3 direction = new Vector3(_inputVector.x, 0f, _inputVector.y);
+        Vector3 direction = GetCameraRelativeDirection(_inputVector);
         Vector3 current = GetVelocity();
         Vector3 targetVelocity = direction * DesiredMoveSpeed(_runRequested);
         Vector3 horizontal = new Vector3(current.x, 0f, current.z);
@@ -161,6 +187,58 @@ public class ThirdPersonPlayerController : MonoBehaviour
         if (_animator) _animator.SetBool(WalkingId, false);
         if (_animator) _animator.SetBool(RunningId, false);
         _animatedSpeed = 0f;
+    }
+
+    public Transform GetActiveCameraTransform()
+    {
+        if (_cameraTransform && _cameraTransform.gameObject.activeInHierarchy)
+            return _cameraTransform;
+
+        if (!_splitScreenManager)
+            _splitScreenManager = FindFirstObjectByType<SplitScreenManager>();
+
+        if (_splitScreenManager && _splitScreenManager.IsSplitActive)
+        {
+            bool isP2 = (_splitScreenManager.player2 == transform) ||
+                        (_localInput && _localInput.PlayerInputComponent && _localInput.PlayerInputComponent.playerIndex == 1);
+
+            GameObject splitCamObj = isP2 ? _splitScreenManager.player2Camera : _splitScreenManager.player1Camera;
+            if (splitCamObj && splitCamObj.activeInHierarchy)
+                return splitCamObj.transform;
+        }
+
+        if (!_cachedMainCamera || !_cachedMainCamera.isActiveAndEnabled)
+            _cachedMainCamera = Camera.main;
+
+        return _cachedMainCamera ? _cachedMainCamera.transform : null;
+    }
+
+    public Vector3 GetCameraRelativeDirection(Vector2 input)
+    {
+        if (input.sqrMagnitude < 0.0001f)
+            return Vector3.zero;
+
+        if (!_useCameraRelativeMovement)
+            return new Vector3(input.x, 0f, input.y);
+
+        Transform cam = GetActiveCameraTransform();
+        if (!cam)
+            return new Vector3(input.x, 0f, input.y);
+
+        Vector3 forward = cam.forward;
+        Vector3 right = cam.right;
+
+        forward.y = 0f;
+        right.y = 0f;
+
+        if (forward.sqrMagnitude < 0.0001f || right.sqrMagnitude < 0.0001f)
+            return new Vector3(input.x, 0f, input.y);
+
+        forward.Normalize();
+        right.Normalize();
+
+        Vector3 moveDir = right * input.x + forward * input.y;
+        return Vector3.ClampMagnitude(moveDir, 1f);
     }
 
     private void StopHorizontalMovement()

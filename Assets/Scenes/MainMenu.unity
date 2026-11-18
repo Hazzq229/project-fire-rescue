@@ -4780,7 +4780,7 @@ MonoBehaviour:
   - Character 3
   requireTwoPlayersToStart: 1
   localCoopJoinManager: {fileID: 1571355838}
-  gameplaySceneName: Gameloop_Demo
+  gameplaySceneName: Gameloop_IJUN
   mainMenuSceneName: MainMenu
   pausePanel: {fileID: 0}
   resumeButton: {fileID: 0}

@@ -290,23 +290,98 @@ namespace HPhysic
         }
 
 
+        [Header("Cooperative Front Section")]
+        [SerializeField, Min(0)] private int fixedFrontConnectors = 3;
+        [SerializeField, Min(0.1f)] private float fixedFrontDistance = 1.05f;
+
+        private float currentCableLength;
+
+        public int FixedFrontConnectors
+        {
+            get => fixedFrontConnectors;
+            set { fixedFrontConnectors = Mathf.Max(0, value); SetCableLength(CableLength); }
+        }
+
+        public float FixedFrontDistance
+        {
+            get => fixedFrontDistance;
+            set { fixedFrontDistance = Mathf.Max(0.1f, value); SetCableLength(CableLength); }
+        }
+
         public Connector StartConnector => startConnector;
         public Connector EndConnector => endConnector;
         public IReadOnlyList<Transform> Points => points;
-        public float CableLength => space * (numberOfPoints + 1);
+        public IReadOnlyList<Transform> Connectors => connectors;
+        public float CableLength => currentCableLength > 0f ? currentCableLength : (space * (numberOfPoints + 1));
         public Vector3 SourcePosition => start.transform.position;
 
         // Change the rest length of the existing rope; retain all bodies, joints and connections.
         public void SetCableLength(float metres)
         {
-            space = Mathf.Max(.05f, metres / (numberOfPoints + 1));
-            foreach (var joint in GetComponentsInChildren<SpringJoint>())
+            currentCableLength = metres;
+            int totalConnectors = connectors != null && connectors.Count > 0 ? connectors.Count : (numberOfPoints + 1);
+            int fixedCount = Mathf.Clamp(fixedFrontConnectors, 0, totalConnectors - 1);
+            int rearCount = totalConnectors - fixedCount;
+
+            float frontSegmentLen = fixedCount > 0 ? (fixedFrontDistance / fixedCount) : 0f;
+            float rearTotalLen = fixedCount > 0 ? Mathf.Max(0.5f, metres - fixedFrontDistance) : metres;
+            // Guard: if there aren't enough rear connectors to represent the cable at a
+            // reasonable segment length, clamp to avoid physically absurd joint distances.
+            float maxSegLen = Mathf.Max(frontSegmentLen * 2f, 1.5f);
+            float rearSegmentLen = Mathf.Clamp(rearTotalLen / Mathf.Max(1, rearCount), 0.05f, maxSegLen);
+
+            space = rearSegmentLen;
+
+            if (points == null || points.Count < totalConnectors + 1)
             {
-                if (!joint.connectedBody || !joint.connectedBody.transform.IsChildOf(transform)) continue;
-                joint.minDistance = space;
-                joint.maxDistance = space;
+                foreach (var joint in GetComponentsInChildren<SpringJoint>())
+                {
+                    if (!joint.connectedBody || !joint.connectedBody.transform.IsChildOf(transform)) continue;
+                    joint.minDistance = space;
+                    joint.maxDistance = space;
+                }
             }
-            brakeLength = space * numberOfPoints * brakeLengthMultiplier + 2f;
+            else
+            {
+                for (int i = 0; i < totalConnectors; i++)
+                {
+                    float targetDist = (i >= totalConnectors - fixedCount) ? frontSegmentLen : rearSegmentLen;
+                    SetJointDistance(i, targetDist);
+                }
+            }
+
+            brakeLength = metres * brakeLengthMultiplier + 2f;
+        }
+
+        private void SetJointDistance(int i, float distance)
+        {
+            if (points == null || i + 1 >= points.Count) return;
+            Transform pA = points[i];
+            Transform pB = points[i + 1];
+            if (!pA || !pB) return;
+            Rigidbody rbA = pA.GetComponent<Rigidbody>();
+            Rigidbody rbB = pB.GetComponent<Rigidbody>();
+
+            // Check joints on pB connected to rbA
+            foreach (var joint in pB.GetComponents<SpringJoint>())
+            {
+                if (joint.connectedBody == rbA)
+                {
+                    joint.minDistance = distance;
+                    joint.maxDistance = distance;
+                    return;
+                }
+            }
+            // Check joints on pA connected to rbB
+            foreach (var joint in pA.GetComponents<SpringJoint>())
+            {
+                if (joint.connectedBody == rbB)
+                {
+                    joint.minDistance = distance;
+                    joint.maxDistance = distance;
+                    return;
+                }
+            }
         }
     }
 }
