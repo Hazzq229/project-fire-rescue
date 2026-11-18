@@ -4,7 +4,6 @@ using UnityEngine;
 public class Fire : MonoBehaviour
 {
     [SerializeField, Range(0f, 1000f)] private float ignitionRate = 20f;
-    [SerializeField, Range(0f, 1000f)] private float burningRate = 30f;
     [SerializeField, Range(0f, 1f)] private float currentIntensity = 1.0f;
     public float GetIntensity() => currentIntensity;
 

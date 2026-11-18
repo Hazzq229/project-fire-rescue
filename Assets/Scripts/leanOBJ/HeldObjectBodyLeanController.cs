@@ -46,6 +46,8 @@ namespace TA.AdaptiveAnimation
         [SerializeField] private float targetAngle;
         [SerializeField] private float currentAngle;
 
+        public string Status => status;
+
         private static AnimationCurve CreateDefaultCurve()
         {
             // Tangent tiap ruas dibuat linear: perubahan bobot di antara titik juga berpengaruh.

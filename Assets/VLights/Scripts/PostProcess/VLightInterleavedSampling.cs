@@ -378,12 +378,6 @@ public class VLightInterleavedSampling : MonoBehaviour
             return;
         }
 
-        if (!SystemInfo.supportsImageEffects)
-        {
-            Debug.LogWarning("Cannot use interleaved sampling. Image effects not supported");
-            return;
-        }
-
         _volumeLightLayer = 1 << LayerMask.NameToLayer(VLightManager.VOLUMETRIC_LIGHT_LAYER_NAME);
 
         cam.cullingMask &= ~_volumeLightLayer;

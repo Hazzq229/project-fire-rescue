@@ -16,11 +16,7 @@ public class VolumeLightAbout : EditorWindow
         VolumeLightAbout window = EditorWindow.CreateInstance<VolumeLightAbout>();
         window.ShowUtility();
 
-#if UNITY_5 || UNITY_2017 || UNITY_2018 || UNITY_2019
         window.titleContent = new GUIContent("About V-Lights");
-#else
-        window.title = "About V-Lights";
-#endif
     }
 
     private void OnGUI()

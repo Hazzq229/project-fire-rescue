@@ -29,9 +29,6 @@ namespace HPlayer
         [SerializeField, Min(1f)]
         private float defaultSpeed = 5f;
 
-        [SerializeField, Min(0.5f)]
-        private float defaultHeight = 1.9f;
-
         [SerializeField, Min(0f)]
         private float smoothMoveTime = 0.1f;
 

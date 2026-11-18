@@ -1,5 +1,12 @@
 ﻿# Project Lessons & Self-Improvement Log
 
+### [2026-11-18] Resolve Unity Compilation Warnings
+
+- Removed three obsolete VLights checks for `SystemInfo.supportsImageEffects`, which always returns true in this project version. The About window now uses `titleContent`.
+- Removed the unused `Fire.burningRate` and sample controller `defaultHeight` fields. Both carry diagnostics keep their serialized Inspector values and expose a read-only `Status` property.
+- Unity recompiled successfully. The About window showed its expected title, and job `712840afa96f485281971ce407f0a35d` passed all three Play Mode checks for extinguisher behavior, hose pickup, and loaded walking speed. The final Console read found zero warnings and errors.
+- Review Inspector fields and their consumers before removing an unused-field warning. Preserve diagnostics that designers still use and verify the result after an actual compilation.
+
 ### [2026-11-18] Merge Upstream Camera Controls with Local Locomotion
 - **Request**: Resolve the ThirdPersonPlayerController conflict by combining the latest local animation changes with GitHub develop.
 - **Resolution**: Compared both Git index stages with origin/develop at `a37b61f`. Kept the upstream per-player camera selection and applied its world direction to walk, dash, reversal detection, and the movement requested by cooperative coordinators. Preserved the local start/stop and foot presentation and the one-shot dash supported by LocalPlayerInput and the animator.

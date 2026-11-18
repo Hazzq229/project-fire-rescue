@@ -16,6 +16,8 @@ namespace TA.AdaptiveAnimation
         [SerializeField] private float speedPercent = 100f;
         [SerializeField] private float evaluatedPenalty;
 
+        public string Status => status;
+
         public bool TryGetSpeedPenalty(out float penalty)
         {
             penalty = 0f;

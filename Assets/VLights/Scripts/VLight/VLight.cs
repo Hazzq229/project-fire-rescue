@@ -873,7 +873,6 @@ public partial class VLight : MonoBehaviour
                 cam.depthTextureMode = DepthTextureMode.None;
                 break;
             case ShadowMode.Realtime:
-                if (SystemInfo.supportsImageEffects)
                 {
                     cam.backgroundColor = Color.white;
                     cam.clearFlags = CameraClearFlags.SolidColor;
@@ -933,8 +932,8 @@ public partial class VLight : MonoBehaviour
                     {
                         Debug.LogWarning("Could not find depth shader. Cannot render shadows");
                     }
+                    break;
                 }
-                break;
         }
     }
 
