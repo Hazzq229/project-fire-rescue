@@ -121,9 +121,19 @@ namespace DisasterSquad.WallOcclusion
         {
             // Find all renderers on the character (including children)
             Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            var modelSlot = GetComponent<TA.AdaptiveAnimation.CharacterModelSlot>();
 
             foreach (Renderer rend in renderers)
             {
+                // Hidden source-rig skins must not reappear as visible outline shells.
+                if (!rend.enabled || !rend.gameObject.activeInHierarchy)
+                    continue;
+
+                // Keep the configured helmet's original surface visible instead
+                // of covering it with the inverted-hull highlight.
+                if (modelSlot && rend.name == modelSlot.headgearMeshName)
+                    continue;
+
                 // Skip renderers that are already outline renderers
                 if (rend.gameObject.name.EndsWith("(Outline)"))
                     continue;

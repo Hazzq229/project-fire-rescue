@@ -60,6 +60,7 @@ public class GameManager : MonoBehaviour
         {
             CheckActiveFire();
             ApplyFireDamage();
+            if (CurrentState != GameState.Playing) return;
             UpdateUI();
             CheckWinCondition();
         }

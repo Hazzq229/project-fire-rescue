@@ -14,6 +14,19 @@ namespace TA.AdaptiveAnimation
         private DoorInteractionController objectController;
         private InteractionContext context;
         private AdaptationResult result;
+        private Component boundSource, metadata;
+        private int bindingsFrame = -1;
+        private GripPointProvider provider;
+        private CarryAnimationLoad load;
+        private VictimAI victim;
+        private CylinderGripProvider cylinder;
+        private BoxCollider box;
+        private AdaptiveSceneProp prop;
+        private Collider shape;
+
+        // Monotonic diagnostics let tests/tools verify reuse without timing-dependent benchmarks.
+        public int ContextRevision { get; private set; }
+        public int BindingRefreshCount { get; private set; }
 
         [Header("Runtime context (read only)")]
         [SerializeField] private AdaptiveObjectType objectType;
@@ -23,15 +36,15 @@ namespace TA.AdaptiveAnimation
         [SerializeField] private CarryRole role;
         [SerializeField] private AdaptiveInteractionType interactionType;
         [SerializeField] private InteractionPhase phase;
+        [Tooltip("Diagnostic route hint; Animator commands remain owned by interaction controllers.")]
         [SerializeField] private string baseAnimationState;
 
-        // Refresh on access as well as Update: ownership may change later in the
-        // same frame, and callers must not receive a cached pending/previous target.
-        public InteractionContext Context { get { RefreshContext(); return context; } }
-        public AdaptationResult Result { get { RefreshContext(); return result; } }
+        // Sample mutable inputs on access; unchanged reads reuse the published result.
+        public InteractionContext Context { get { ReadContext(); return context; } }
+        public AdaptationResult Result { get { ReadContext(); return result; } }
 
         private void OnEnable() => RefreshContext();
-        private void Update() => RefreshContext();
+        private void Update() => ReadContext();
         private void OnDisable() => Clear();
 
         public static bool TryRead(InteractionController controller, out AdaptationResult adaptation)
@@ -48,6 +61,13 @@ namespace TA.AdaptiveAnimation
 
         public void RefreshContext()
         {
+            // Explicit structural invalidation for same-frame component additions/reparenting.
+            bindingsFrame = -1;
+            ReadContext();
+        }
+
+        private void ReadContext()
+        {
             if (!actor) actor = GetComponent<InteractionController>();
             if (!objectController) objectController = GetComponent<DoorInteractionController>();
             if (!isActiveAndEnabled || !actor || !actor.isActiveAndEnabled)
@@ -62,19 +82,15 @@ namespace TA.AdaptiveAnimation
             Component source = held ? (Component)held : pending ? (Component)pending : target;
             if (!source) { Clear(); return; }
 
-            // An adapted lamp keeps its switch component on the original visual,
-            // while its size/load/provider belong to the normalized carry root.
-            var adaptedParent = target ? source.GetComponentInParent<AdaptiveSceneProp>() : null;
-            Component metadata = adaptedParent ? (Component)adaptedParent : source;
-            var provider = metadata.GetComponent<GripPointProvider>();
-            var load = metadata.GetComponent<CarryAnimationLoad>();
+            if (boundSource != source || bindingsFrame != Time.frameCount)
+                BindSource(source, target != null);
             bool hasWeight = load && load.isActiveAndEnabled;
             float weight = hasWeight ? load.WeightKg : 0f;
             var coop = held as CooperativeCarryObject;
             float effective = hasWeight && coop ? coop.LoadPerPlayerKg : weight;
             var hoseGrip = source as CooperativeHoseGrip;
             var type = hoseGrip || provider is HoseGripProvider ? AdaptiveObjectType.Hose :
-                source.GetComponent<VictimAI>() ? AdaptiveObjectType.Survivor :
+                victim ? AdaptiveObjectType.Survivor :
                 provider is CylinderGripProvider ? AdaptiveObjectType.Cylinder :
                 provider is BoxGripProvider || provider is CooperativeGripProvider || provider is ScenePropGripProvider
                     ? AdaptiveObjectType.Box : AdaptiveObjectType.Unknown;
@@ -84,23 +100,35 @@ namespace TA.AdaptiveAnimation
             var currentPhase = target ? InteractionPhase.ObjectInteraction : pending ? InteractionPhase.Preparing :
                 actor.IsPlacingDown ? InteractionPhase.Placing : InteractionPhase.Carrying;
             var currentRole = held ? actor.CurrentCarryRole : CarryRole.None;
-            context = new InteractionContext(actor, held, pending, target, source, type,
-                Dimensions(metadata), weight, effective, hasWeight, currentRole, interaction, currentPhase,
-                provider, target ? objectController.ActiveAnimationName : string.Empty);
-            result = ProceduralLayerProcessor.Process(context);
-            UpdateDiagnostics();
+            Publish(new InteractionContext(actor, held, pending, target, source, type,
+                Dimensions(), weight, effective, hasWeight, currentRole, interaction, currentPhase,
+                provider, target ? objectController.ActiveAnimationName : string.Empty,
+                actor.IsPickingUp, provider && provider.isActiveAndEnabled));
         }
 
-        private static Vector3 Dimensions(Component source)
+        private void BindSource(Component source, bool objectInteraction)
         {
-            var cylinder = source.GetComponent<CylinderGripProvider>();
+            boundSource = source;
+            bindingsFrame = Time.frameCount;
+            BindingRefreshCount++;
+            // Lamp switch stays on the visual; normalized parent owns carry metadata.
+            var parent = objectInteraction ? source.GetComponentInParent<AdaptiveSceneProp>() : null;
+            metadata = parent ? (Component)parent : source;
+            provider = metadata.GetComponent<GripPointProvider>();
+            load = metadata.GetComponent<CarryAnimationLoad>();
+            victim = source.GetComponent<VictimAI>();
+            cylinder = metadata.GetComponent<CylinderGripProvider>();
+            box = metadata.GetComponent<BoxCollider>();
+            prop = metadata.GetComponent<AdaptiveSceneProp>();
+            shape = metadata.GetComponent<Collider>();
+            if (!shape) shape = metadata.GetComponentInChildren<Collider>();
+        }
+
+        private Vector3 Dimensions()
+        {
             if (cylinder) return cylinder.ObjectDimensions;
-            var box = source.GetComponent<BoxCollider>();
             if (box) return Vector3.Scale(box.size, Abs(box.transform.lossyScale));
-            var prop = source.GetComponent<AdaptiveSceneProp>();
-            if (prop) return Vector3.Scale(prop.Dimensions, Abs(source.transform.lossyScale));
-            var shape = source.GetComponent<Collider>();
-            if (!shape) shape = source.GetComponentInChildren<Collider>();
+            if (prop) return Vector3.Scale(prop.Dimensions, Abs(metadata.transform.lossyScale));
             if (!shape) return Vector3.zero;
             // Express the shape in its own axes, never a yaw-dependent world AABB.
             if (shape is CapsuleCollider capsule)
@@ -120,8 +148,19 @@ namespace TA.AdaptiveAnimation
 
         private void Clear()
         {
-            context = default;
-            result = ProceduralLayerProcessor.Process(context);
+            boundSource = metadata = null;
+            bindingsFrame = -1;
+            provider = null; load = null; victim = null;
+            cylinder = null; box = null; prop = null; shape = null;
+            Publish(default);
+        }
+
+        private void Publish(InteractionContext next)
+        {
+            if (ContextRevision != 0 && context.SameInputs(next)) return;
+            context = next;
+            result = ProceduralLayerProcessor.Process(next);
+            ContextRevision++;
             UpdateDiagnostics();
         }
 
@@ -130,7 +169,7 @@ namespace TA.AdaptiveAnimation
             objectType = context.ObjectType; objectSize = context.ObjectSize;
             objectWeightKg = context.ObjectWeightKg; effectiveWeightKg = context.EffectiveWeightKg;
             role = context.Role; interactionType = context.InteractionType; phase = context.Phase;
-            baseAnimationState = result.BaseAnimationState;
+            baseAnimationState = result.AnimationStateHint;
         }
     }
 }

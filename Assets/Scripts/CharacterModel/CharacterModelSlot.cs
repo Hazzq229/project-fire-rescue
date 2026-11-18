@@ -7,6 +7,29 @@ namespace TA.AdaptiveAnimation
     [AddComponentMenu("TA/Adaptive Animation/Character Model Slot")]
     public sealed class CharacterModelSlot : MonoBehaviour
     {
+        [System.Serializable]
+        public sealed class RigidHeadPart
+        {
+            public string rendererPath;
+            public Mesh mesh;
+            public Bounds localBounds;
+        }
+
+        // Authoring data only: Apply Model consumes this in the Editor. Runtime follows
+        // the saved bones/meshes and never reads or rebuilds their vertices.
+        [System.Serializable]
+        public sealed class RigidHeadSetup
+        {
+            public GameObject model;
+            public string modelDependencyHash;
+            public string headPath, rootName;
+            public Vector3 appearancePosition, appearanceScale, rootScale;
+            public Quaternion appearanceRotation;
+            public string headgearName;
+            public float headgearScale, headgearLift;
+            public RigidHeadPart[] parts;
+        }
+
         [Tooltip("Existing visual container (IDLE). Keep its transform and Animator paths intact.")]
         public Transform modelRoot;
         [Tooltip("Common root bone of the existing skeleton (Bone).")]
@@ -24,6 +47,7 @@ namespace TA.AdaptiveAnimation
         [HideInInspector] public Mesh[] generatedMeshes;
         [HideInInspector] public Renderer[] originalRenderers;
         [HideInInspector] public bool[] originalEnabled;
+        [HideInInspector] public RigidHeadSetup savedRigidHead;
 
         private void Reset()
         {

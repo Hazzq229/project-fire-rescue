@@ -35,12 +35,20 @@ public class GameloopDoorTests
             var hinge = (Rigidbody)door.GetType().GetField("hingeBody", Flags).GetValue(door);
             Assert.IsTrue(hinge.isKinematic);
             Assert.IsTrue(hinge.GetComponentsInChildren<Collider>().Any(c => c.enabled && !c.isTrigger), door.name + " requires a solid moving collider");
+            var closedPoints = new[] { (Transform)Call(door, "GetInteractionPoint", 0), (Transform)Call(door, "GetInteractionPoint", 1) };
+            var closedPositions = closedPoints.Select(p => p.position).ToArray();
+            var closedRotations = closedPoints.Select(p => p.rotation).ToArray();
             foreach (int side in new[] { 0, 0, 1, 1 })
             {
                 bool before = (bool)P(door,"IsOpen");
                 var point = (Transform)Call(door,"GetInteractionPoint",side);
                 Assert.That(point.position.y, Is.EqualTo(.39f).Within(.015f), door.name);
-                if (before) Assert.IsTrue(point.IsChildOf(hinge.transform), "Open points must follow the hinge");
+                if (before)
+                {
+                    Assert.AreSame(closedPoints[side], point, "The opener must reuse its stationary closing anchor");
+                    Assert.Less(Vector3.Distance(closedPositions[side], point.position), .001f, "Closing anchor must not drift");
+                    Assert.Less(Quaternion.Angle(closedRotations[side], point.rotation), .1f, "Closing anchor must not rotate with the leaf");
+                }
                 body.position = point.position; body.rotation = point.rotation; body.velocity = Vector3.zero;
                 Physics.SyncTransforms();
                 for (float until = Time.time + .3f; Time.time < until;) yield return null;
