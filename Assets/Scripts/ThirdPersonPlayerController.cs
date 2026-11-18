@@ -58,6 +58,21 @@ public class ThirdPersonPlayerController : MonoBehaviour
     }
     public TA.AdaptiveAnimation.CooperativeCarryObject CooperativeCarry { get; set; }
     public TA.AdaptiveAnimation.CooperativeFireHose CooperativeHose { get; set; }
+    // Coordinators report each operator's movement, including formation rotation.
+    // Both cadence and the visible model's stride plane must consume the same motion.
+    public Vector3 LocomotionVelocity
+    {
+        get
+        {
+            Vector3 velocity = CooperativeCarry ? CooperativeCarry.GetPlayerVelocity(_interaction) :
+                CooperativeHose ? CooperativeHose.GetPlayerVelocity(_interaction) :
+                _rb ? GetVelocity() : Vector3.zero;
+            velocity.y = 0f;
+            return velocity;
+        }
+    }
+    public bool UsesCarryStrideDirection => CooperativeCarry || CooperativeHose ||
+        (_interaction && _interaction.HeldObject);
     private float knockbackRemaining;
     public bool IsKnockedBack => knockbackRemaining > 0f;
 
