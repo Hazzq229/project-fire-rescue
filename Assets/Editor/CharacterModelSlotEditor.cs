@@ -6,164 +6,273 @@ using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-/// <summary>Editor-only appearance replacement with validation and a single Undo transaction.</summary>
+/// <summary>Editor-only appearance replacement. The imported model keeps its own skeleton.</summary>
 public static class CharacterModelReplacement
 {
     sealed class Plan
     {
-        public Transform sourceRoot;
+        public GameObject model;
         public Renderer[] renderers;
-        public readonly Dictionary<Transform, Transform> bones = new();
+        public CharacterModelSlot.RigidHeadSetup rigidHead;
     }
 
-    static string Path(Transform child, Transform root) => AnimationUtility.CalculateTransformPath(child, root);
+    static Bounds CombinedBounds(IEnumerable<Renderer> renderers)
+    {
+        var items = renderers.Where(renderer => renderer).ToArray();
+        if (items.Length == 0) throw new InvalidOperationException("Model tidak memiliki renderer.");
+        var bounds = new Bounds();
+        bool first = true;
+        foreach (var renderer in items)
+        {
+            if (renderer is SkinnedMeshRenderer skin && skin.sharedMesh && skin.sharedMesh.vertexCount > 0)
+            {
+                var baked = new Mesh();
+                try
+                {
+                    skin.BakeMesh(baked, true);
+                    foreach (var vertex in baked.vertices)
+                    {
+                        Vector3 point = skin.transform.TransformPoint(vertex);
+                        if (first) { bounds = new Bounds(point, Vector3.zero); first = false; }
+                        else bounds.Encapsulate(point);
+                    }
+                }
+                finally { Object.DestroyImmediate(baked); }
+            }
+            else if (renderer is MeshRenderer)
+            {
+                if (first) { bounds = renderer.bounds; first = false; }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+        }
+        if (first) throw new InvalidOperationException("Model tidak memiliki geometri yang dapat diukur.");
+        return bounds;
+    }
 
     static Plan Prepare(CharacterModelSlot slot)
     {
         if (Application.isPlaying) throw new InvalidOperationException("Ganti model di Edit Mode.");
-        if (!slot.modelRoot || !slot.skeletonRoot || !slot.skeletonRoot.IsChildOf(slot.modelRoot) ||
-            !slot.modelRoot.IsChildOf(slot.transform))
-            throw new InvalidOperationException("Model Root dan Skeleton Root harus berada di dalam player ini.");
+        if (!slot.modelRoot || !slot.skeletonRoot || !slot.modelRoot.IsChildOf(slot.transform))
+            throw new InvalidOperationException("Model Root dan Skeleton Root harus diisi dari player ini.");
         if (!slot.replacementModel || !EditorUtility.IsPersistent(slot.replacementModel))
             throw new InvalidOperationException("Pilih asset FBX/prefab dari Project, bukan objek scene.");
+
         var root = slot.replacementModel.transform;
-        var candidates = root.GetComponentsInChildren<Transform>(true).Where(t => t.name == slot.skeletonRoot.name).ToArray();
-        if (candidates.Length != 1) throw new InvalidOperationException("Model harus memiliki tepat satu root tulang bernama " + slot.skeletonRoot.name);
-        var plan = new Plan { sourceRoot = root };
-        var sourceBone = candidates[0];
-        // Map by full relative path, never by ambiguous leaf names.
-        foreach (var bone in sourceBone.GetComponentsInChildren<Transform>(true))
-        {
-            string path = Path(bone, sourceBone);
-            var target = path.Length == 0 ? slot.skeletonRoot : slot.skeletonRoot.Find(path);
-            if (!target) throw new InvalidOperationException("Tulang tidak cocok: " + path);
-            plan.bones.Add(bone, target);
-        }
-        // Ancestors determine mesh-space alignment; ignore the model asset's root transform.
-        var a = sourceBone.parent; var b = slot.skeletonRoot.parent;
-        while (a && a != root && b && b != slot.modelRoot)
-        {
-            if (Vector3.Distance(a.localPosition, b.localPosition) > .001f ||
-                Quaternion.Angle(a.localRotation, b.localRotation) > .1f ||
-                Vector3.Distance(a.localScale, b.localScale) > .001f)
-                throw new InvalidOperationException("Transform armature berbeda. Samakan orientasi dan skala export model.");
-            plan.bones.Add(a, b); a = a.parent; b = b.parent;
-        }
-        if (a != root || b != slot.modelRoot)
-            throw new InvalidOperationException("Struktur armature berbeda dari rig player.");
-        plan.renderers = root.GetComponentsInChildren<Renderer>(true)
-            .Where(r => r is SkinnedMeshRenderer || r is MeshRenderer).ToArray();
-        if (!plan.renderers.OfType<SkinnedMeshRenderer>().Any())
+        if (root.GetComponentsInChildren<Transform>(true).Count(transform => transform.name == slot.skeletonRoot.name) != 1)
+            throw new InvalidOperationException("Model harus memiliki tepat satu root tulang bernama " + slot.skeletonRoot.name + ".");
+        var renderers = root.GetComponentsInChildren<Renderer>(true)
+            .Where(renderer => renderer is SkinnedMeshRenderer || renderer is MeshRenderer).ToArray();
+        if (!renderers.OfType<SkinnedMeshRenderer>().Any())
             throw new InvalidOperationException("Model tidak memiliki SkinnedMeshRenderer.");
-        foreach (var skin in plan.renderers.OfType<SkinnedMeshRenderer>())
+        var rigidHead = slot.savedRigidHead;
+        if (rigidHead != null && rigidHead.model == slot.replacementModel)
+            ValidateRigidHead(slot, rigidHead);
+        // Capture the currently calibrated setup before replacing its hierarchy.
+        if (slot.generatedVisuals && slot.appliedModel == slot.replacementModel &&
+            slot.generatedVisuals.GetComponent<CharacterRigidHeadFollower>())
+            rigidHead = CaptureRigidHead(slot);
+        if (rigidHead != null && rigidHead.model == slot.replacementModel)
+            ValidateRigidHead(slot, rigidHead);
+        else rigidHead = null;
+        return new Plan { model = slot.replacementModel, renderers = renderers, rigidHead = rigidHead };
+    }
+
+    static CharacterModelSlot.RigidHeadSetup CaptureRigidHead(CharacterModelSlot slot)
+    {
+        var visual = slot.generatedVisuals.transform;
+        var follower = visual.GetComponent<CharacterRigidHeadFollower>();
+        if (!follower.SourceHead || !follower.RigidRoot || follower.RigidRoot.parent != visual)
+            throw new InvalidOperationException("Rigid head harus memiliki sumber tulang dan root langsung di CharacterAppearance.");
+        var imported = follower.SourceHead;
+        while (imported.parent && imported.parent != visual) imported = imported.parent;
+        if (imported.parent != visual) throw new InvalidOperationException("Sumber kepala bukan bagian dari model pengganti.");
+        return new CharacterModelSlot.RigidHeadSetup
         {
-            if (!skin.sharedMesh || skin.bones.Length != skin.sharedMesh.bindposes.Length || skin.bones.Length == 0)
-                throw new InvalidOperationException("Mesh/bind pose tidak lengkap: " + skin.name);
-            foreach (var bone in skin.bones)
-                if (!bone || !plan.bones.ContainsKey(bone))
-                    throw new InvalidOperationException("Bone mesh berada di luar skeleton: " + skin.name);
-            if (skin.rootBone && !plan.bones.ContainsKey(skin.rootBone))
-                throw new InvalidOperationException("Root bone mesh tidak cocok: " + skin.name);
-        }
-        // Compare to the original imported asset, not a potentially animated scene pose.
-        var animator = slot.GetComponent<Animator>();
-        var referenceModel = animator && animator.avatar
-            ? AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GetAssetPath(animator.avatar)) : null;
-        foreach (var pair in plan.bones)
+            model = slot.replacementModel,
+            modelDependencyHash = AssetDatabase.GetAssetDependencyHash(AssetDatabase.GetAssetPath(slot.replacementModel)).ToString(),
+            headPath = AnimationUtility.CalculateTransformPath(follower.SourceHead, imported),
+            rootName = follower.RigidRoot.name, rootScale = follower.RigidRoot.localScale,
+            appearancePosition = visual.localPosition, appearanceRotation = visual.localRotation,
+            appearanceScale = visual.localScale,
+            headgearName = slot.headgearMeshName, headgearScale = slot.headgearScale, headgearLift = slot.headgearLift,
+            parts = imported.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                .Where(skin => skin.rootBone == follower.RigidRoot)
+                .Select(skin => new CharacterModelSlot.RigidHeadPart {
+                    rendererPath = AnimationUtility.CalculateTransformPath(skin.transform, imported),
+                    mesh = skin.sharedMesh, localBounds = skin.localBounds
+                }).ToArray()
+        };
+    }
+
+    static void ValidateRigidHead(CharacterModelSlot slot, CharacterModelSlot.RigidHeadSetup setup)
+    {
+        if (setup.modelDependencyHash != AssetDatabase.GetAssetDependencyHash(AssetDatabase.GetAssetPath(slot.replacementModel)).ToString())
+            throw new InvalidOperationException("Asset model berubah. Bangun ulang mesh kepala tersimpan sebelum Apply Model.");
+        if (setup.headgearName != slot.headgearMeshName || !Mathf.Approximately(setup.headgearScale, slot.headgearScale) ||
+            !Mathf.Approximately(setup.headgearLift, slot.headgearLift))
+            throw new InvalidOperationException("Kalibrasi topi berbeda dari mesh kepala tersimpan. Bangun ulang mesh untuk kalibrasi baru; Apply dibatalkan agar topi tidak di-fit dua kali.");
+        if (!slot.replacementModel.transform.Find(setup.headPath) || setup.parts == null || setup.parts.Length == 0)
+            throw new InvalidOperationException("Konfigurasi rigid head tidak lengkap.");
+        foreach (var part in setup.parts)
         {
-            var rest = referenceModel ? referenceModel.transform.Find(Path(pair.Value, slot.modelRoot)) : null;
-            if (!rest) rest = PrefabUtility.GetCorrespondingObjectFromOriginalSource(pair.Value);
-            if (!rest) rest = pair.Value;
-            if (Vector3.Distance(pair.Key.localPosition, rest.localPosition) > .001f ||
-                Quaternion.Angle(pair.Key.localRotation, rest.localRotation) > .1f ||
-                Vector3.Distance(pair.Key.localScale, rest.localScale) > .001f)
-                throw new InvalidOperationException("Rest pose/skala tulang berbeda: " + pair.Key.name + ". Gunakan rig export yang sama.");
+            var target = slot.replacementModel.transform.Find(part.rendererPath);
+            var skin = target ? target.GetComponent<SkinnedMeshRenderer>() : null;
+            if (!skin || !skin.sharedMesh || !part.mesh || !EditorUtility.IsPersistent(part.mesh) ||
+                part.mesh.vertexCount != skin.sharedMesh.vertexCount || part.mesh.bindposes.Length != 1)
+                throw new InvalidOperationException("Mesh rigid head tersimpan tidak cocok: " + part.rendererPath);
         }
-        return plan;
+    }
+
+    static void RestoreRigidHead(GameObject visual, GameObject imported, CharacterModelSlot.RigidHeadSetup setup)
+    {
+        var head = imported.transform.Find(setup.headPath);
+        var root = new GameObject(setup.rootName);
+        Undo.RegisterCreatedObjectUndo(root, "Restore rigid head root");
+        Undo.SetTransformParent(root.transform, visual.transform, "Parent rigid head root");
+        Undo.RecordObject(root.transform, "Restore rigid head scale");
+        root.transform.localScale = setup.rootScale;
+        var follower = Undo.AddComponent<CharacterRigidHeadFollower>(visual);
+        follower.Configure(head, root.transform);
+        foreach (var part in setup.parts)
+        {
+            var skin = imported.transform.Find(part.rendererPath).GetComponent<SkinnedMeshRenderer>();
+            Undo.RecordObject(skin, "Restore persistent head mesh");
+            skin.sharedMesh = part.mesh;
+            skin.bones = new[] { root.transform };
+            skin.rootBone = root.transform;
+            skin.localBounds = part.localBounds;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(skin);
+        }
+    }
+
+    // The gameplay controller uses generic animation paths. Match the imported skeleton's
+    // path to the existing visual path without editing the source FBX.
+    static void MatchAnimationPath(Transform importedRoot, Transform sourceBone, CharacterModelSlot slot)
+    {
+        var sourcePath = AnimationUtility.CalculateTransformPath(sourceBone, importedRoot).Split('/');
+        var targetPath = AnimationUtility.CalculateTransformPath(slot.skeletonRoot, slot.modelRoot).Split('/');
+        if (sourcePath.Length != targetPath.Length) return;
+
+        var current = importedRoot;
+        for (var i = 0; i < sourcePath.Length; i++)
+        {
+            current = current.Find(sourcePath[i]);
+            if (!current) return;
+            current.name = targetPath[i];
+        }
     }
 
     public static string Validate(CharacterModelSlot slot)
     {
-        try { var plan = Prepare(slot); return "Cocok: " + plan.renderers.Length + " renderer siap dipasang."; }
-        catch (InvalidOperationException ex) { return "Tidak cocok: " + ex.Message; }
+        try { var plan = Prepare(slot); return "Cocok: " + plan.renderers.Length + " renderer siap dipasang dengan skeleton asli model."; }
+        catch (InvalidOperationException exception) { return "Tidak cocok: " + exception.Message; }
     }
 
     public static void Apply(CharacterModelSlot slot)
     {
-        var plan = Prepare(slot); // Validate everything before touching the current appearance.
-        Undo.IncrementCurrentGroup(); int group = Undo.GetCurrentGroup();
+        var plan = Prepare(slot);
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        var group = Undo.GetCurrentGroup();
         Undo.SetCurrentGroupName("Replace character model");
         try
         {
-            Undo.RecordObject(slot, "Replace character model");
+            Undo.RegisterCompleteObjectUndo(slot, "Replace character model");
+            if (plan.rigidHead != null) slot.savedRigidHead = plan.rigidHead;
             if (slot.generatedVisuals)
             {
-                if (slot.boneAttachments != null)
-                    foreach (var attachment in slot.boneAttachments) if (attachment) Undo.DestroyObjectImmediate(attachment);
+                if (slot.generatedMeshes != null)
+                    foreach (var mesh in slot.generatedMeshes) if (mesh && !EditorUtility.IsPersistent(mesh)) Undo.DestroyObjectImmediate(mesh);
                 Undo.DestroyObjectImmediate(slot.generatedVisuals);
             }
             else
             {
                 slot.originalRenderers = slot.modelRoot.GetComponentsInChildren<Renderer>(true)
-                    .Where(r => r is SkinnedMeshRenderer || r is MeshRenderer).ToArray();
-                slot.originalEnabled = slot.originalRenderers.Select(r => r.enabled).ToArray();
+                    .Where(renderer => renderer is SkinnedMeshRenderer || renderer is MeshRenderer).ToArray();
+                slot.originalEnabled = slot.originalRenderers.Select(renderer => renderer.enabled).ToArray();
             }
+
             var visual = new GameObject("CharacterAppearance");
             Undo.RegisterCreatedObjectUndo(visual, "Create character appearance");
-            visual.transform.SetParent(slot.modelRoot, false);
-            slot.generatedVisuals = visual;
-            var attachments = new List<GameObject>();
-            var mappedBones = new HashSet<Transform>(plan.bones.Values);
-            var transforms = new Dictionary<Transform, Transform>(plan.bones) { [plan.sourceRoot] = visual.transform };
-            Transform CopyTransform(Transform source)
+            Undo.SetTransformParent(visual.transform, slot.transform, "Parent character appearance");
+            Undo.RecordObject(visual.transform, "Align character appearance");
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localRotation = Quaternion.identity;
+            visual.transform.localScale = Vector3.one;
+
+            var imported = (GameObject)PrefabUtility.InstantiatePrefab(plan.model);
+            Undo.RegisterCreatedObjectUndo(imported, "Instantiate replacement model");
+            Vector3 importedPosition = imported.transform.localPosition;
+            Quaternion importedRotation = imported.transform.localRotation;
+            Vector3 importedScale = imported.transform.localScale;
+            Undo.SetTransformParent(imported.transform, visual.transform, "Parent replacement model");
+            Undo.RecordObject(imported.transform, "Preserve imported model transform");
+            imported.transform.localPosition = importedPosition;
+            imported.transform.localRotation = importedRotation;
+            imported.transform.localScale = importedScale;
+
+            var sourceBone = imported.GetComponentsInChildren<Transform>(true)
+                .Single(transform => transform.name == slot.skeletonRoot.name);
+
+            foreach (var animator in imported.GetComponentsInChildren<Animator>(true)) animator.enabled = false;
+            var sourceAnimator = slot.GetComponent<Animator>();
+            if (sourceAnimator)
             {
-                if (transforms.TryGetValue(source, out var found)) return found;
-                var parent = CopyTransform(source.parent);
-                var child = new GameObject(source.name);
-                Undo.RegisterCreatedObjectUndo(child, "Create visual node");
-                child.transform.SetParent(parent, false);
-                if (mappedBones.Contains(parent)) attachments.Add(child);
-                child.transform.localPosition = source.localPosition;
-                child.transform.localRotation = source.localRotation;
-                child.transform.localScale = source.localScale;
-                child.layer = slot.modelRoot.gameObject.layer;
-                child.SetActive(source.gameObject.activeSelf);
-                transforms.Add(source, child.transform);
-                return child.transform;
+                var mirror = Undo.AddComponent<CharacterModelAnimatorMirror>(visual);
+                mirror.Configure(sourceAnimator, slot.skeletonRoot, sourceBone);
             }
-            foreach (var source in plan.renderers)
+
+            if (plan.rigidHead != null)
             {
-                var parent = CopyTransform(source.transform);
-                // Use a dedicated child even when a renderer lives directly on a mapped bone.
-                var go = new GameObject(source.name + "_Visual");
-                Undo.RegisterCreatedObjectUndo(go, "Create mesh renderer");
-                go.transform.SetParent(parent, false);
-                if (mappedBones.Contains(parent)) attachments.Add(go);
-                go.SetActive(source.gameObject.activeSelf);
-                go.layer = slot.modelRoot.gameObject.layer;
-                var renderer = (Renderer)Undo.AddComponent(go, source.GetType());
-                EditorUtility.CopySerialized(source, renderer);
-                renderer.probeAnchor = source.probeAnchor && transforms.TryGetValue(source.probeAnchor, out var anchor) ? anchor : null;
-                renderer.lightProbeProxyVolumeOverride = null;
-                if (source is SkinnedMeshRenderer skin)
+                visual.transform.localPosition = plan.rigidHead.appearancePosition;
+                visual.transform.localRotation = plan.rigidHead.appearanceRotation;
+                visual.transform.localScale = plan.rigidHead.appearanceScale;
+                RestoreRigidHead(visual, imported, plan.rigidHead);
+            }
+            else
+            {
+                var referenceBounds = CombinedBounds(slot.originalRenderers);
+                var importedBounds = CombinedBounds(imported.GetComponentsInChildren<Renderer>(true));
+                float uniformScale = referenceBounds.size.y / Mathf.Max(.0001f, importedBounds.size.y);
+                visual.transform.localScale = Vector3.one * uniformScale;
+
+                importedBounds = CombinedBounds(imported.GetComponentsInChildren<Renderer>(true));
+                Vector3 alignmentOffset = Vector3.zero;
+                alignmentOffset.x = referenceBounds.center.x - importedBounds.center.x;
+                alignmentOffset.y = referenceBounds.min.y - importedBounds.min.y;
+                alignmentOffset.z = referenceBounds.center.z - importedBounds.center.z;
+                visual.transform.position += alignmentOffset;
+            }
+
+            if (plan.rigidHead == null && (!Mathf.Approximately(slot.headgearScale, 1f) || !Mathf.Approximately(slot.headgearLift, 0f)))
+            {
+                var headgear = imported.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                    .FirstOrDefault(renderer => renderer.name == slot.headgearMeshName);
+                if (headgear)
                 {
-                    var copy = (SkinnedMeshRenderer)renderer;
-                    copy.bones = skin.bones.Select(bone => plan.bones[bone]).ToArray();
-                    copy.rootBone = skin.rootBone ? plan.bones[skin.rootBone] : null;
-                }
-                else
-                {
-                    var filter = source.GetComponent<MeshFilter>();
-                    Undo.AddComponent<MeshFilter>(go).sharedMesh = filter ? filter.sharedMesh : null;
+                    var weights = headgear.sharedMesh.boneWeights;
+                    int bone = weights[0].boneIndex0;
+                    if (weights.Any(weight => weight.boneIndex0 != bone || weight.weight0 < .999f))
+                        throw new InvalidOperationException("Headgear fit requires an accessory rigidly weighted to one bone.");
+                    var fit = Undo.AddComponent<CharacterHeadgearFit>(visual);
+                    fit.Configure(headgear, bone, slot.headgearScale, slot.transform.up * slot.headgearLift);
                 }
             }
+
             foreach (var renderer in slot.originalRenderers)
-                if (renderer) { Undo.RecordObject(renderer, "Hide original appearance"); renderer.enabled = false;
-                    PrefabUtility.RecordPrefabInstancePropertyModifications(renderer); }
+                if (renderer)
+                {
+                    Undo.RecordObject(renderer, "Hide original appearance");
+                    renderer.enabled = false;
+                    PrefabUtility.RecordPrefabInstancePropertyModifications(renderer);
+                }
             slot.appliedModel = slot.replacementModel;
-            slot.boneAttachments = attachments.ToArray();
+            slot.generatedVisuals = visual;
+            slot.boneAttachments = null;
+            slot.generatedMeshes = null;
             EditorUtility.SetDirty(slot);
             PrefabUtility.RecordPrefabInstancePropertyModifications(slot);
+            Undo.FlushUndoRecordObjects();
             Undo.CollapseUndoOperations(group);
         }
         catch { Undo.RevertAllDownToGroup(group); throw; }
@@ -173,24 +282,30 @@ public static class CharacterModelReplacement
     {
         if (Application.isPlaying) throw new InvalidOperationException("Gunakan Edit Mode.");
         if (!slot.generatedVisuals) return;
-        Undo.IncrementCurrentGroup(); int group = Undo.GetCurrentGroup();
+        Undo.FlushUndoRecordObjects();
+        Undo.IncrementCurrentGroup();
+        var group = Undo.GetCurrentGroup();
         Undo.SetCurrentGroupName("Restore character model");
-        Undo.RecordObject(slot, "Restore character model");
-        if (slot.boneAttachments != null)
-            foreach (var attachment in slot.boneAttachments) if (attachment) Undo.DestroyObjectImmediate(attachment);
+        Undo.RegisterCompleteObjectUndo(slot, "Restore character model");
+        if (slot.generatedMeshes != null)
+            foreach (var mesh in slot.generatedMeshes) if (mesh && !EditorUtility.IsPersistent(mesh)) Undo.DestroyObjectImmediate(mesh);
         Undo.DestroyObjectImmediate(slot.generatedVisuals);
-        for (int i = 0; i < slot.originalRenderers.Length; i++)
+        for (var i = 0; i < slot.originalRenderers.Length; i++)
             if (slot.originalRenderers[i])
             {
                 Undo.RecordObject(slot.originalRenderers[i], "Restore renderer");
                 slot.originalRenderers[i].enabled = slot.originalEnabled[i];
                 PrefabUtility.RecordPrefabInstancePropertyModifications(slot.originalRenderers[i]);
             }
-        slot.generatedVisuals = null; slot.appliedModel = null;
+        slot.generatedVisuals = null;
+        slot.appliedModel = null;
         slot.boneAttachments = null;
-        slot.originalRenderers = null; slot.originalEnabled = null;
+        slot.generatedMeshes = null;
+        slot.originalRenderers = null;
+        slot.originalEnabled = null;
         EditorUtility.SetDirty(slot);
         PrefabUtility.RecordPrefabInstancePropertyModifications(slot);
+        Undo.FlushUndoRecordObjects();
         Undo.CollapseUndoOperations(group);
     }
 }
@@ -199,18 +314,21 @@ public static class CharacterModelReplacement
 public sealed class CharacterModelSlotEditor : Editor
 {
     string message;
+
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
         var slot = (CharacterModelSlot)target;
-        EditorGUILayout.HelpBox("Tarik FBX/prefab ke Replacement Model, lalu Validate dan Apply. Rig gameplay, Animator, dan IK tetap dipakai. Model harus memakai nama tulang, struktur, rest pose, dan skala export yang sama.", MessageType.Info);
+        EditorGUILayout.HelpBox("Model baru memakai skeleton dan bind pose aslinya. Tingginya disamakan dengan visual player lama, sementara animator player disinkronkan tanpa mengubah rig gameplay atau IK.", MessageType.Info);
+        if (slot.savedRigidHead != null && slot.savedRigidHead.model)
+            EditorGUILayout.HelpBox("Konfigurasi kepala/topi tersimpan akan dipakai saat model yang sama dipasang ulang, termasuk setelah Restore. Perubahan FBX atau kalibrasi topi memerlukan mesh kepala yang dibangun ulang.", MessageType.Info);
         using (new EditorGUI.DisabledScope(Application.isPlaying))
         {
             if (GUILayout.Button("Validate Model")) message = CharacterModelReplacement.Validate(slot);
             if (GUILayout.Button("Apply Model"))
             {
                 try { CharacterModelReplacement.Apply(slot); message = "Model berhasil dipasang. Simpan scene/prefab."; }
-                catch (Exception ex) { message = ex.Message; }
+                catch (Exception exception) { message = exception.Message; }
             }
             using (new EditorGUI.DisabledScope(!slot.generatedVisuals))
                 if (GUILayout.Button("Restore Original Model")) { CharacterModelReplacement.Restore(slot); message = "Model awal dipulihkan."; }

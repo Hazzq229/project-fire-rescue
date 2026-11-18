@@ -99,6 +99,12 @@ public class MainMenuUIManager : MonoBehaviour
         }
     }
 
+    private void Start()
+    {
+        // EventSystem may become available after this component's Awake.
+        EnsureMenuSelection();
+    }
+
     private void ConnectButtons()
     {
         AddListener(playButton, ShowCharacterSelect);
@@ -149,6 +155,7 @@ public class MainMenuUIManager : MonoBehaviour
         SetPanel(mainMenuPanel, false);
         SetPanel(creditsPanel, true);
         SetPanel(selectCharacterPanel, false);
+        EnsureMenuSelection();
     }
 
     public void ShowCharacterSelect()
@@ -299,6 +306,55 @@ public class MainMenuUIManager : MonoBehaviour
             startGameButton.interactable = player1Joined &&
                 (!requireTwoPlayersToStart || player2Joined) && hasCharacters;
         }
+
+        EnsureMenuSelection();
+    }
+
+    private void EnsureMenuSelection()
+    {
+        EventSystem eventSystem = EventSystem.current;
+        if (isGameplayScene || eventSystem == null)
+            return;
+
+        GameObject panel = mainMenuPanel != null && mainMenuPanel.activeInHierarchy ? mainMenuPanel :
+            creditsPanel != null && creditsPanel.activeInHierarchy ? creditsPanel :
+            selectCharacterPanel != null && selectCharacterPanel.activeInHierarchy ? selectCharacterPanel : null;
+        if (panel == null)
+            return;
+
+        GameObject current = eventSystem.currentSelectedGameObject;
+        if (current != null && current.activeInHierarchy && current.transform.IsChildOf(panel.transform))
+        {
+            Selectable selected = current.GetComponent<Selectable>();
+            if (selected != null && selected.IsActive() && selected.IsInteractable())
+                return;
+        }
+
+        bool hasSelection;
+        if (panel == mainMenuPanel)
+            hasSelection = SelectIfUsable(eventSystem, playButton) ||
+                SelectIfUsable(eventSystem, creditsButton) || SelectIfUsable(eventSystem, quitButton);
+        else if (panel == creditsPanel)
+            hasSelection = SelectIfUsable(eventSystem, creditsBackButton);
+        else
+            hasSelection = SelectIfUsable(eventSystem, previousCharacterButton) ||
+                SelectIfUsable(eventSystem, nextCharacterButton) ||
+                SelectIfUsable(eventSystem, previousCharacterButtonP2) ||
+                SelectIfUsable(eventSystem, nextCharacterButtonP2) ||
+                SelectIfUsable(eventSystem, startGameButton) ||
+                SelectIfUsable(eventSystem, characterSelectBackButton);
+
+        if (!hasSelection && current != null)
+            eventSystem.SetSelectedGameObject(null);
+    }
+
+    private static bool SelectIfUsable(EventSystem eventSystem, Button button)
+    {
+        if (button == null || !button.IsActive() || !button.IsInteractable())
+            return false;
+
+        eventSystem.SetSelectedGameObject(button.gameObject);
+        return true;
     }
 
     // PAUSE MENU

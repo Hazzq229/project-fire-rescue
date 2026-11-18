@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace HPlayer
@@ -8,6 +8,7 @@ namespace HPlayer
     public class LocalPlayerInput : MonoBehaviour
     {
         private PlayerInput _playerInput;
+        [SerializeField] private string keyboardControlScheme;
 
         public PlayerInput PlayerInputComponent => _playerInput;
         public bool IsReady => isActiveAndEnabled && _playerInput != null && Application.isFocused;
@@ -15,6 +16,14 @@ namespace HPlayer
         private void Awake()
         {
             _playerInput = GetComponent<PlayerInput>();
+        }
+
+        private void Start()
+        {
+            if (string.IsNullOrEmpty(keyboardControlScheme) || Keyboard.current == null || !_playerInput) return;
+            _playerInput.neverAutoSwitchControlSchemes = true;
+            _playerInput.SwitchCurrentControlScheme(keyboardControlScheme, Keyboard.current);
+            _playerInput.SwitchCurrentActionMap("Player");
         }
 
         private InputAction GetAction(string actionName)
@@ -33,7 +42,9 @@ namespace HPlayer
         public Vector2 HoseAim => GetAction("HoseAim")?.ReadValue<Vector2>() ?? Vector2.zero;
         public bool HoseExtendPressed => GetAction("HoseExtend")?.WasPressedThisFrame() ?? false;
         public bool HoseRetractPressed => GetAction("HoseRetract")?.WasPressedThisFrame() ?? false;
-        public bool RunHeld => GetAction("Run")?.IsPressed() ?? false;
+        // The existing Run binding is a one-shot dash button for both keyboard schemes.
+        // Dash triggers from dedicated Dash action (gamepad buttonSouth/leftTrigger, keyboard shift/alt) or legacy Run action.
+        public bool DashPressed => (GetAction("Dash")?.WasPressedThisFrame() ?? false) || (GetAction("Run")?.WasPressedThisFrame() ?? false);
         public bool ThrowPressed => GetAction("Throw")?.WasPressedThisFrame() ?? false;
     }
 }

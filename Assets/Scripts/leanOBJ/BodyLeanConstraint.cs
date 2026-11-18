@@ -13,6 +13,8 @@ namespace TA.AdaptiveAnimation
         [SyncSceneToStream, Range(-BodyLeanConstraint.MaxSupportedAngle, BodyLeanConstraint.MaxSupportedAngle)] public float angleDegrees;
         // World-space rotation vector (axis * degrees), independent of the character's carry role.
         [SyncSceneToStream] public Vector3 effortRotationWorld;
+        [SyncSceneToStream] public Vector3 loadRotationWorld;
+        [SyncSceneToStream] public Vector3 headRotationWorld;
 
         [Tooltip("Opsional: spine.001. Harus merupakan leluhur Chest.")]
         public Transform lowerSpine;
@@ -36,6 +38,7 @@ namespace TA.AdaptiveAnimation
             chest = lowerSpine = neck = null;
             angleDegrees = 0f;
             effortRotationWorld = Vector3.zero;
+            loadRotationWorld = headRotationWorld = Vector3.zero;
             lowerSpineShare = 0.6f;
             neckCompensation = 0.8f;
         }
@@ -50,6 +53,8 @@ namespace TA.AdaptiveAnimation
         public bool hasNeck;
         public FloatProperty angle;
         public Vector3Property effort;
+        public Vector3Property loadRotation;
+        public Vector3Property headRotation;
         public FloatProperty lowerShare;
         public FloatProperty neckCorrection;
         public FloatProperty jobWeight { get; set; }
@@ -83,15 +88,18 @@ namespace TA.AdaptiveAnimation
             float degrees = Mathf.Clamp(angle.Get(stream), -BodyLeanConstraint.MaxSupportedAngle, BodyLeanConstraint.MaxSupportedAngle) * influence;
             float share = hasLowerSpine ? Mathf.Clamp01(lowerShare.Get(stream)) : 0f;
             Vector3 effortRotation = Vector3.ClampMagnitude(effort.Get(stream), 12f) * influence;
+            Vector3 load = Vector3.ClampMagnitude(loadRotation.Get(stream), BodyLeanConstraint.MaxSupportedAngle) * influence;
 
             // Diproses dari induk ke anak. Jumlah sudut lokal tetap sebesar input.
             if (hasLowerSpine)
             {
                 AddLocalX(stream, lowerSpine, degrees * share);
                 AddWorldEffort(stream, lowerSpine, effortRotation * share);
+                AddWorldEffort(stream, lowerSpine, load * share);
             }
             AddLocalX(stream, chest, degrees * (1f - share));
             AddWorldEffort(stream, chest, effortRotation * (1f - share));
+            AddWorldEffort(stream, chest, load * (1f - share));
             // Koreksi perkiraan pada sumbu lokal yang sudah dikalibrasi pengguna.
             // Bukan pengunci pandangan dunia: sumbu bisa berbeda saat pose berubah.
             if (hasNeck)
@@ -99,6 +107,9 @@ namespace TA.AdaptiveAnimation
                 float compensation = Mathf.Clamp01(neckCorrection.Get(stream));
                 AddLocalX(stream, neck, -degrees * compensation);
                 AddWorldEffort(stream, neck, -effortRotation * compensation);
+                // Stylized load intentionally keeps the chest's backward tilt in the head,
+                // then raises the gaze further. Legacy local lean still uses compensation.
+                AddWorldEffort(stream, neck, Vector3.ClampMagnitude(headRotation.Get(stream), 20f) * influence);
             }
         }
     }
@@ -116,6 +127,10 @@ namespace TA.AdaptiveAnimation
                     ConstraintsUtils.ConstructConstraintDataPropertyName(nameof(BodyLeanData.angleDegrees))),
                 effort = Vector3Property.Bind(animator, component,
                     ConstraintsUtils.ConstructConstraintDataPropertyName(nameof(BodyLeanData.effortRotationWorld))),
+                loadRotation = Vector3Property.Bind(animator, component,
+                    ConstraintsUtils.ConstructConstraintDataPropertyName(nameof(BodyLeanData.loadRotationWorld))),
+                headRotation = Vector3Property.Bind(animator, component,
+                    ConstraintsUtils.ConstructConstraintDataPropertyName(nameof(BodyLeanData.headRotationWorld))),
                 lowerShare = FloatProperty.Bind(animator, component,
                     ConstraintsUtils.ConstructConstraintDataPropertyName(nameof(BodyLeanData.lowerSpineShare))),
                 neckCorrection = FloatProperty.Bind(animator, component,
@@ -150,5 +165,18 @@ namespace TA.AdaptiveAnimation
             value.effortRotationWorld = Vector3.ClampMagnitude(worldRotation, 12f);
             data = value;
         }
+
+        public void SetStylizedPose(Vector3 loadRotation, Vector3 headRotation)
+        {
+            var value = data;
+            value.loadRotationWorld = IsFinite(loadRotation)
+                ? Vector3.ClampMagnitude(loadRotation, MaxSupportedAngle) : Vector3.zero;
+            value.headRotationWorld = IsFinite(headRotation)
+                ? Vector3.ClampMagnitude(headRotation, 20f) : Vector3.zero;
+            data = value;
+        }
+
+        private static bool IsFinite(Vector3 value) =>
+            float.IsFinite(value.x) && float.IsFinite(value.y) && float.IsFinite(value.z);
     }
 }

@@ -14,9 +14,9 @@ namespace TA.AdaptiveAnimation
         {
             return new AnimationCurve(
                 new Keyframe(0f, 1f, 0f, 0f),
-                new Keyframe(10f, 1f, 0f, -0.0075f),
-                new Keyframe(30f, 0.85f, -0.0075f, -0.0075f),
-                new Keyframe(50f, 0.7f, -0.0075f, 0f))
+                new Keyframe(10f, 0.85f, -0.015f, -0.01f),
+                new Keyframe(30f, 0.65f, -0.01f, -0.0125f),
+                new Keyframe(50f, 0.4f, -0.0125f, 0f))
             {
                 preWrapMode = WrapMode.ClampForever,
                 postWrapMode = WrapMode.ClampForever

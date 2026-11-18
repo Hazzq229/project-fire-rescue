@@ -17,9 +17,19 @@ namespace TA.AdaptiveAnimation
         [SerializeField] private AnimationCurve weightToAngle = CreateDefaultCurve();
         [Tooltip("Aktif: gunakan tanda sudut kurva apa adanya. Nonaktif: balik tanda sudut kurva.")]
         [SerializeField] private bool positiveXBendsForward = true;
-        [Tooltip("Batas awal konservatif 5 derajat. Naikkan bertahap setelah kontak tangan diperiksa.")]
-        [SerializeField, Range(0f, BodyLeanConstraint.MaxSupportedAngle)] private float maximumAngle = 5f;
+        [Tooltip("Batas pose akhir setelah exaggeration; kurva bobot tetap menjadi nilai dasar.")]
+        [SerializeField, Range(0f, BodyLeanConstraint.MaxSupportedAngle)] private float maximumAngle = 30f;
         [SerializeField, Min(1f)] private float degreesPerSecond = 20f;
+        [Header("Stylized load and pickup anticipation")]
+        [SerializeField] private bool enableStylizedLoadPose = true;
+        [SerializeField, Range(1f, 3f)] private float loadExaggeration = 1.6f;
+        [SerializeField, Range(0f, 20f)] private float maximumHeadLookUp = 8f;
+        [SerializeField, Range(0f, 20f)] private float anticipationAngle = 10f;
+        [SerializeField, Min(.05f)] private float anticipationDuration = .25f;
+        [SerializeField] private float currentStylizedAngle;
+        [SerializeField] private float currentHeadLookUp;
+        private HInteractions.Liftable anticipationObject;
+        private float anticipationElapsed;
         [Header("Cooperative effort")]
         [SerializeField, Range(0f, 12f)] private float conflictLeanDegrees = 8f;
         [Tooltip("Keep cooperative grip reachable when one player bears the whole heavy load.")]
@@ -56,12 +66,25 @@ namespace TA.AdaptiveAnimation
             if (bodyLean) bodyLean.SetAngle(0f);
             currentEffortRotation = Vector3.zero;
             if (bodyLean) bodyLean.SetEffort(Vector3.zero);
+            ResetStylizedPose();
         }
 
         private void Update()
         {
             targetAngle = currentLoadKg = 0f;
             Vector3 targetEffort = Vector3.zero;
+            bool loadPose = false;
+            bool anticipation = false;
+            float anticipationTarget = 0f;
+            bool hasContext = AdaptiveAnimationManager.TryRead(interactionController, out var adaptation);
+            var held = hasContext ? adaptation.Context.HeldObject : interactionController ? interactionController.HeldObject : null;
+            var pending = hasContext ? adaptation.Context.PendingObject : interactionController ? interactionController.PendingPickupObject : null;
+            var carryRole = hasContext ? adaptation.Context.Role : interactionController ? interactionController.CurrentCarryRole : CarryRole.None;
+            if (pending != anticipationObject)
+            {
+                anticipationObject = pending;
+                anticipationElapsed = 0f;
+            }
             if (!bodyLean || !bodyLean.data.chest)
             {
                 if (bodyLean) bodyLean.SetAngle(0f);
@@ -76,23 +99,36 @@ namespace TA.AdaptiveAnimation
             }
             else if (!interactionController || !interactionController.isActiveAndEnabled)
                 status = "Interaction Controller tidak tersedia";
-            else if (!interactionController.HeldObject || !interactionController.HeldObject.isActiveAndEnabled)
+            else if (enableStylizedLoadPose && pending && !held &&
+                     pending is not CooperativeHoseGrip)
+            {
+                var load = pending.GetComponent<CarryAnimationLoad>();
+                currentLoadKg = hasContext ? adaptation.EffectiveWeightKg : load && load.isActiveAndEnabled ? load.WeightKg : 0f;
+                anticipationElapsed += Time.deltaTime;
+                float preparation = Mathf.SmoothStep(0f, 1f,
+                    Mathf.Clamp01(anticipationElapsed / Mathf.Max(.05f, anticipationDuration)));
+                anticipationTarget = -anticipationAngle * Mathf.Clamp01(currentLoadKg / 50f) * preparation;
+                anticipation = true;
+                status = "Antisipasi: membungkuk menyiapkan angkatan sebelum kontak";
+            }
+            else if (!held || !held.isActiveAndEnabled)
                 status = "Tidak memegang objek: kembali ke pose dasar";
             else if (interactionController.IsPlacingDown)
                 status = "Meletakkan: mengikuti gerak membungkuk dari clip pickup";
             else
             {
-                var load = interactionController.HeldObject.GetComponent<CarryAnimationLoad>();
-                if (!load || !load.isActiveAndEnabled)
+                var load = held.GetComponent<CarryAnimationLoad>();
+                if (hasContext ? !adaptation.HasLoad : !load || !load.isActiveAndEnabled)
                     status = "Objek tidak memiliki data bobot animasi aktif";
                 else if (weightToAngle == null || weightToAngle.length == 0)
                     status = "Kurva bobot belum diisi";
                 else
                 {
-                    var coop = interactionController.HeldObject as CooperativeCarryObject;
-                    currentLoadKg = coop ? coop.LoadPerPlayerKg : load.WeightKg;
+                    var coop = held as CooperativeCarryObject;
+                    currentLoadKg = hasContext ? adaptation.EffectiveWeightKg : coop ? coop.LoadPerPlayerKg : load.WeightKg;
                     targetAngle = weightToAngle.Evaluate(currentLoadKg)
                         * (positiveXBendsForward ? 1f : -1f);
+                    loadPose = enableStylizedLoadPose;
                     if (coop)
                     {
                         targetAngle = Mathf.Clamp(targetAngle, -cooperativeLoadAngleLimit, cooperativeLoadAngleLimit);
@@ -101,22 +137,49 @@ namespace TA.AdaptiveAnimation
                     status = "Mengikuti bobot objek";
                 }
             }
-            if (interactionController && interactionController.HeldObject is CooperativeHoseGrip hoseGrip && hoseGrip.Hose)
+            if (interactionController && held is CooperativeHoseGrip hoseGrip && hoseGrip.Hose)
             {
-                targetAngle = hoseGrip.Hose.Pressure * (hoseGrip.Role == CarryRole.Front ? 9f : 4f);
+                targetAngle = hoseGrip.Hose.Pressure * (carryRole == CarryRole.Front ? 9f : 4f);
+                targetEffort = hoseGrip.Hose.GetCarryEffort(interactionController);
+                loadPose = false;
                 status = "Menahan tekanan fire hose";
             }
             if (float.IsNaN(targetAngle) || float.IsInfinity(targetAngle)) targetAngle = 0f;
-            if (interactionController && interactionController.TryGetComponent<ThirdPersonPlayerController>(out var mover) && mover.IsKnockedBack)
+            bool knockedBack = interactionController &&
+                interactionController.TryGetComponent<ThirdPersonPlayerController>(out var mover) && mover.IsKnockedBack;
+            if (knockedBack)
             {
                 targetAngle = -18f;
+                loadPose = anticipation = false;
                 status = "Dorongan balik fire hose";
             }
             float limit = Mathf.Clamp(maximumAngle, 0f, BodyLeanConstraint.MaxSupportedAngle);
+            if (knockedBack) limit = Mathf.Max(limit, 18f);
             targetAngle = Mathf.Clamp(targetAngle, -limit, limit);
             currentAngle = Mathf.MoveTowards(currentAngle, targetAngle,
                 Mathf.Max(1f, degreesPerSecond) * Time.deltaTime);
-            bodyLean.SetAngle(currentAngle);
+            float stylizedTarget = anticipation ? anticipationTarget : loadPose
+                ? Mathf.Clamp(Mathf.Abs(targetAngle) * loadExaggeration, 0f,
+                    held is CooperativeCarryObject
+                        ? Mathf.Min(limit, cooperativeLoadAngleLimit) : limit) : 0f;
+            currentStylizedAngle = Mathf.MoveTowards(currentStylizedAngle, stylizedTarget,
+                Mathf.Max(1f, degreesPerSecond) * Time.deltaTime);
+            float headTarget = loadPose ? maximumHeadLookUp * Mathf.Clamp01(currentLoadKg / 50f) : 0f;
+            bool aimingHose = interactionController && held is CooperativeHoseGrip aimingGrip &&
+                aimingGrip.Hose && carryRole == CarryRole.Front;
+            if (aimingHose)
+            {
+                var hose = ((CooperativeHoseGrip)held).Hose;
+                headTarget = Mathf.Clamp(6f + Mathf.Asin(hose.AimDirection.y) * Mathf.Rad2Deg * .6f, -20f, 20f);
+            }
+            currentHeadLookUp = Mathf.MoveTowards(currentHeadLookUp, headTarget,
+                (aimingHose ? 90f : Mathf.Max(1f, degreesPerSecond)) * Time.deltaTime);
+            // World-space backward rotation avoids assumptions about imported bone local X axes.
+            Vector3 right = interactionController ? interactionController.transform.right : transform.right;
+            bodyLean.SetStylizedPose(-right * currentStylizedAngle, -right * currentHeadLookUp);
+            bodyLean.SetAngle(enableStylizedLoadPose && !manualPreview &&
+                !(interactionController && held is CooperativeHoseGrip) && !knockedBack
+                ? 0f : currentAngle);
             currentEffortRotation = Vector3.MoveTowards(currentEffortRotation, targetEffort,
                 Mathf.Max(1f, degreesPerSecond) * Time.deltaTime);
             bodyLean.SetEffort(currentEffortRotation);
@@ -128,6 +191,14 @@ namespace TA.AdaptiveAnimation
             if (bodyLean) bodyLean.SetAngle(0f);
             currentEffortRotation = Vector3.zero;
             if (bodyLean) bodyLean.SetEffort(Vector3.zero);
+            ResetStylizedPose();
+        }
+
+        private void ResetStylizedPose()
+        {
+            anticipationObject = null;
+            anticipationElapsed = currentStylizedAngle = currentHeadLookUp = 0f;
+            if (bodyLean) bodyLean.SetStylizedPose(Vector3.zero, Vector3.zero);
         }
     }
 }

@@ -11,15 +11,25 @@ namespace HGame.Objects
         [SerializeField] private Renderer bulbRenderer;
         [SerializeField] private bool initiallyOn = true;
         [SerializeField] private string switchAnimation = "DoorPush";
+        [SerializeField, Min(.1f)] private float interactionReach = .85f;
         [SerializeField] private Color onColor = new Color(1f, .76f, .32f, 1f);
         [SerializeField] private Color offColor = new Color(.16f, .13f, .09f, 1f);
         private MaterialPropertyBlock properties;
         private MonoBehaviour owner;
         private bool reservedState, performed;
         public bool IsOn { get; private set; }
+        public float InteractionReach => interactionReach;
         public override bool ActiveState => IsOn;
         public override bool IsMoving => false;
-        public override bool Available => isActiveAndEnabled && interactionPoint && lampLight && !owner;
+        public override bool Available => isActiveAndEnabled && interactionPoint && lampLight && !owner && !IsCarried;
+        private bool IsCarried
+        {
+            get
+            {
+                var carryable = GetComponentInParent<HInteractions.Liftable>();
+                return carryable && carryable.IsLifted;
+            }
+        }
         public override Transform GetInteractionPoint(int index) => index == 0 ? interactionPoint : null;
         public override string AnimationFor(bool nextState, int pointIndex) => switchAnimation;
 
@@ -40,7 +50,7 @@ namespace HGame.Objects
 
         public override bool PerformReservedAction(MonoBehaviour requester)
         {
-            if (!isActiveAndEnabled || !lampLight || !owner || owner != requester || performed) return false;
+            if (!isActiveAndEnabled || !lampLight || !owner || owner != requester || performed || IsCarried) return false;
             performed = true;
             SetState(reservedState);
             return true;

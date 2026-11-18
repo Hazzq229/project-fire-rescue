@@ -20,6 +20,13 @@ namespace TA.AdaptiveAnimation
         public readonly List<AdaptiveSceneProp> Props = new();
         public bool IsReady { get; private set; }
 
+        // Scene-authored players can be assigned in the Inspector; spawned players
+        // are supplied by the spawner before this adapter's Start coroutine runs.
+        public void BindPlayerReference(CapsuleCollider player)
+        {
+            if (!playerReference && player) playerReference = player;
+        }
+
         public static ScenePropSize Classify(Vector3 size, float playerHeight)
         {
             float longest = Mathf.Max(size.x, size.y, size.z);
@@ -34,7 +41,15 @@ namespace TA.AdaptiveAnimation
             var candidates = new List<Transform>();
             foreach (var item in propsRoot.GetComponentsInChildren<Transform>(true))
             {
-                if (!item.name.StartsWith("Props_") || item == propsRoot) continue;
+                if (item == propsRoot) continue;
+                // Explicitly configured objects do not depend on naming conventions.
+                if (item.TryGetComponent<ScenePropCarrySettings>(out _))
+                {
+                    if (item.GetComponentInChildren<MeshRenderer>(true)) candidates.Add(item);
+                    continue;
+                }
+                if (item.GetComponentInParent<ScenePropCarrySettings>()) continue;
+                if (!item.name.StartsWith("Props_")) continue;
                 bool excluded = false;
                 foreach (string prefix in fixedPropPrefixes)
                     if (item.name.StartsWith(prefix)) excluded = true;
@@ -91,10 +106,12 @@ namespace TA.AdaptiveAnimation
             root.transform.position = root.transform.TransformPoint(localBounds.center);
             Vector3 dimensions = localBounds.size;
             dimensions = Vector3.Max(dimensions, Vector3.one * .025f);
-            bool team = Mathf.Max(dimensions.x, dimensions.z) > playerHeight * .65f ||
+            var settings = visual.GetComponent<ScenePropCarrySettings>();
+            bool team = settings ? settings.RequiresTwoPlayers :
+                Mathf.Max(dimensions.x, dimensions.z) > playerHeight * .65f ||
                 (visual.name.ToLowerInvariant().Contains("bookshelf") && Mathf.Max(dimensions.x, dimensions.y, dimensions.z) > playerHeight * .5f);
             ScenePropSize category = team ? ScenePropSize.Big : Classify(dimensions, playerHeight);
-            float weight = team ? 60f : category == ScenePropSize.Small ? 5f : category == ScenePropSize.Medium ? 15f : 30f;
+            float weight = settings ? settings.WeightKg : team ? 60f : category == ScenePropSize.Small ? 5f : category == ScenePropSize.Medium ? 15f : 30f;
 
             foreach (var old in visual.GetComponentsInChildren<Liftable>(true)) { old.enabled = false; Destroy(old); }
             foreach (var body in visual.GetComponentsInChildren<Rigidbody>(true))
@@ -115,6 +132,12 @@ namespace TA.AdaptiveAnimation
             shape.isTrigger = solid;
             root.AddComponent<CarryAnimationLoad>().Configure(weight);
             float gripY = Mathf.Min(0f, .55f - dimensions.y * .5f);
+            // These imported models have readable meshes and calibrated surface grips.
+            bool surfaceGrip = settings ? settings.GripKind == ScenePropGripKind.BoxSurface :
+                visual.name.StartsWith("Props_Computer_01") || visual.name.StartsWith("Props_Table_01");
+            var provider = root.AddComponent<ScenePropGripProvider>();
+            provider.Configure(shape, gripY, team, surfaceGrip);
+            gripY = provider.GripHeight;
             Liftable liftable;
             if (team)
             {
@@ -126,12 +149,11 @@ namespace TA.AdaptiveAnimation
                 liftable = root.AddComponent<Liftable>();
                 var attachment = root.AddComponent<StableCarryAttachment>();
                 // The placeholder's short forearms need the near face slightly behind CarryAnchor.
-                attachment.ConfigureOffset(new Vector3(0f, -gripY, dimensions.z * .5f - .08f));
+                attachment.ConfigureOffset(-provider.SingleGripCenter + Vector3.back * .08f);
                 attachment.DynamicOnRelease = true;
                 root.AddComponent<CarryWeightMovement>().Configure(speedProfile);
             }
             liftable.enabled = false;
-            root.AddComponent<ScenePropGripProvider>().Configure(shape, gripY, team);
             var metadata = root.AddComponent<AdaptiveSceneProp>(); metadata.Configure(category, dimensions, team, visual);
             Props.Add(metadata);
             root.SetActive(wasActive);

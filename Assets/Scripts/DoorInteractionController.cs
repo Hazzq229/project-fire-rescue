@@ -28,7 +28,9 @@ namespace HPlayer
         // Legacy class/serialized references are retained for all existing door scenes.
         public bool IsInteractingWithObject => IsInteractingWithDoor;
         public ObjectInteractionTarget ActiveTarget => activeDoor;
+        public string ActiveAnimationName { get; private set; }
         private Rigidbody body;
+        private CapsuleCollider capsule;
         private ObjectInteractionTarget activeDoor;
         private Transform selectedPoint;
         private bool entered, contactReceived, requested, stateExited;
@@ -39,6 +41,7 @@ namespace HPlayer
         private void Awake()
         {
             body = GetComponent<Rigidbody>();
+            capsule = GetComponent<CapsuleCollider>();
             localInput = GetComponent<LocalPlayerInput>();
             if (!playerController) playerController = GetComponent<ThirdPersonPlayerController>();
             if (!interactionController) interactionController = GetComponent<InteractionController>();
@@ -86,13 +89,12 @@ namespace HPlayer
             }
             if (interactionController.HeldObject || interactionController.IsPickingUp ||
                 interactionController.ExternalInteractionLocked || body.isKinematic) return;
-            if (animator.IsInTransition(0)) return;
 
             ObjectInteractionTarget nearest = null;
             Transform pointFound = null;
             bool frontFound = true;
             int pointIndex = 0;
-            float best = interactionDistance * interactionDistance;
+            float best = float.PositiveInfinity;
             foreach (var door in ObjectInteractionTarget.ActiveTargets)
             {
                 if (!door || !door.Available) continue;
@@ -104,10 +106,16 @@ namespace HPlayer
                     Vector3 delta = point.position - body.position;
                     delta.y = 0f;
                     float distance = delta.sqrMagnitude;
-                    if (distance > best) continue;
-                    // Kandidat seberang dinding/daun pintu ditolak; tetap coba kandidat lain.
-                    if (delta.magnitude > 0.01f && body.SweepTest(delta.normalized,
-                        out RaycastHit hit, delta.magnitude, QueryTriggerInteraction.Ignore)) continue;
+                    var hingedDoor = door as DoorInteractable;
+                    var lamp = door as LampInteractable;
+                    float reach = hingedDoor ? hingedDoor.InteractionReach : lamp ? lamp.InteractionReach : interactionDistance;
+                    if (hingedDoor) distance = hingedDoor.SelectionDistanceSquared(body.position, side);
+                    if (distance > reach * reach || distance > best) continue;
+                    Vector3 waypoint;
+                    bool blocked = hingedDoor && hingedDoor.TryGetClosingWaypoint(body.position, out waypoint)
+                        ? ApproachBlocked(body.position, waypoint, door) || ApproachBlocked(waypoint, point.position, door)
+                        : ApproachBlocked(body.position, point.position, door);
+                    if (blocked) continue;
                     best = distance;
                     nearest = door;
                     pointFound = point;
@@ -135,6 +143,7 @@ namespace HPlayer
             if (animator.GetCurrentAnimatorStateInfo(0).fullPathHash == stateHash) return;
             if (!nearest.TryReserve(this, wantsOpen)) return;
             activeDoor = nearest;
+            ActiveAnimationName = animationName;
             selectedPoint = pointFound;
             activeStateHash = stateHash;
             activeTriggerHash = triggerHash;
@@ -144,6 +153,36 @@ namespace HPlayer
             interactionController.ExternalInteractionLocked = true;
             playerController.SetMovementLocked(true);
             alignRoutine = StartCoroutine(AlignAndStart());
+        }
+
+        private bool ApproachBlocked(Vector3 from, Vector3 to, ObjectInteractionTarget target)
+        {
+            to.y = from.y;
+            Vector3 delta = to - from;
+            if (delta.magnitude <= .01f) return false;
+            if (capsule)
+            {
+                Vector3 scale = capsule.transform.lossyScale;
+                float radius = capsule.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+                float halfSegment = Mathf.Max(0f, capsule.height * Mathf.Abs(scale.y) * .5f - radius);
+                Vector3 center = from + capsule.transform.TransformVector(capsule.center);
+                foreach (var hit in Physics.CapsuleCastAll(center + Vector3.up * halfSegment,
+                    center - Vector3.up * halfSegment, radius, delta.normalized, delta.magnitude, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    if (hit.collider.transform.IsChildOf(transform)) continue;
+                    if (target is DoorInteractable && hit.collider.transform.IsChildOf(target.transform)) continue;
+                    if (Vector3.Dot(hit.normal, delta.normalized) < -.01f) return true;
+                }
+            }
+            // Also detect thin walls touching the starting capsule.
+            foreach (var hit in Physics.RaycastAll(from + Vector3.up * .3f,
+                delta.normalized, delta.magnitude, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (hit.collider.transform.IsChildOf(transform)) continue;
+                if (target is DoorInteractable && hit.collider.transform.IsChildOf(target.transform)) continue;
+                return true;
+            }
+            return false;
         }
 
         private IEnumerator AlignAndStart()
@@ -164,12 +203,21 @@ namespace HPlayer
             Vector3 start = body.position;
             Quaternion rotation = body.rotation;
             Quaternion target = forward.sqrMagnitude > .001f ? Quaternion.LookRotation(forward) : rotation;
-            for (float elapsed = 0f; elapsed < alignmentDuration; elapsed += Time.fixedDeltaTime)
+            var hingedDoor = activeDoor as DoorInteractable;
+            Vector3 waypoint;
+            Vector3[] path = hingedDoor && hingedDoor.TryGetClosingWaypoint(start, out waypoint)
+                ? new[] { waypoint, destination } : new[] { destination };
+            foreach (var position in path)
             {
-                float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((elapsed + Time.fixedDeltaTime) / alignmentDuration));
-                body.MovePosition(Vector3.Lerp(start, destination, t));
-                body.MoveRotation(Quaternion.Slerp(rotation, target, t));
-                yield return new WaitForFixedUpdate();
+                start = body.position;
+                rotation = body.rotation;
+                for (float elapsed = 0f; elapsed < alignmentDuration; elapsed += Time.fixedDeltaTime)
+                {
+                    float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((elapsed + Time.fixedDeltaTime) / alignmentDuration));
+                    body.MovePosition(Vector3.Lerp(start, position, t));
+                    body.MoveRotation(Quaternion.Slerp(rotation, target, t));
+                    yield return new WaitForFixedUpdate();
+                }
             }
             requested = true;
             requestedAt = Time.time;
@@ -218,6 +266,7 @@ namespace HPlayer
             alignRoutine = null;
             if (activeDoor) activeDoor.Release(this);
             activeDoor = null;
+            ActiveAnimationName = null;
             selectedPoint = null;
             if (interactionController) interactionController.ExternalInteractionLocked = false;
             if (playerController) playerController.SetMovementLocked(false);
