@@ -13,6 +13,8 @@ public class GameplayPlayerSpawner : MonoBehaviour
     [Header("Character Prefabs")]
     [Tooltip("Order must match characterNames in MainMenuUIManager.")]
     [SerializeField] private GameObject[] characterPrefabs;
+    [Tooltip("Optional Player prefab variant for the second player's appearance in this scene.")]
+    [SerializeField] private GameObject player2PrefabOverride;
 
     [Header("Spawn Points")]
     [SerializeField] private Transform player1SpawnPoint;
@@ -177,8 +179,11 @@ public class GameplayPlayerSpawner : MonoBehaviour
             Debug.Log($"[GameplayPlayerSpawner] Saved slot P{slotIndex + 1}: scheme='{slot.ControlScheme}', " +
                       $"devices=[{DescribeDevices(slot.Devices)}], spawn='{spawnPoint.name}' at {spawnPoint.position}.", this);
 
+        GameObject prefab = slotIndex == 1 && player2PrefabOverride
+            ? player2PrefabOverride
+            : characterPrefabs[slot.CharacterIndex];
         PlayerInput playerInput = PlayerInput.Instantiate(
-            characterPrefabs[slot.CharacterIndex],
+            prefab,
             playerIndex: slotIndex,
             controlScheme: slot.ControlScheme,
             splitScreenIndex: -1,

@@ -5,16 +5,12 @@ public class SafeZoneTrigger : MonoBehaviour
     private void OnTriggerEnter(Collider other)
     {
         if (other.TryGetComponent(out VictimAI victim))
-        {
-            victim.isSafe = true;
-        }
+            victim.SetSafeZone(this, true);
     }
 
     private void OnTriggerExit(Collider other)
     {
         if (other.TryGetComponent(out VictimAI victim))
-        {
-            victim.isSafe = false;
-        }
+            victim.SetSafeZone(this, false);
     }
 }

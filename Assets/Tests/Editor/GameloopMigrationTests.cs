@@ -69,13 +69,76 @@ public class GameloopMigrationTests
         yield return Wait(.6f);
         Assert.AreEqual("Gameloop_IJUN", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         Assert.IsTrue((bool)P(C(GameObject.Find("FR_Level_1"), "TA.AdaptiveAnimation.AdaptiveSceneProps"), "IsReady"));
+        var basePlayer = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Player.prefab");
+        var baseController = basePlayer.GetComponent<Animator>().runtimeAnimatorController;
         foreach (string name in new[] { "Player1", "Player2" })
         {
             var player = GameObject.Find(name); Assert.NotNull(player);
+            bool isSecond = name == "Player2";
             var input = C(player, "UnityEngine.InputSystem.PlayerInput");
-            Assert.AreEqual(name == "Player1" ? "KeyboardWASD" : "KeyboardArrows", P(input, "currentControlScheme"));
-            Assert.IsNotNull(player.GetComponentsInChildren<SkinnedMeshRenderer>().Single(r => r.name == "Topi_Pemadam").sharedMesh);
+            Assert.AreEqual(isSecond ? "KeyboardArrows" : "KeyboardWASD", P(input, "currentControlScheme"));
+            Assert.AreEqual("Player", P(P(input, "currentActionMap"), "name"));
+            Assert.IsNotNull(C(player, "ThirdPersonPlayerController"));
+            var animator = player.GetComponent<Animator>();
+            Assert.AreSame(baseController, animator.runtimeAnimatorController);
+
+            var slot = C(player, "TA.AdaptiveAnimation.CharacterModelSlot");
+            Assert.AreEqual(isSecond ? "Kucing" : "Rubah_P1", ((GameObject)F(slot, "appliedModel")).name);
+            string helmetName = (string)F(slot, "headgearMeshName");
+            var appearance = (GameObject)F(slot, "generatedVisuals");
+            Assert.AreSame(animator, F(C(appearance, "TA.AdaptiveAnimation.CharacterModelAnimatorMirror"), "sourceAnimator"));
+            var skins = appearance.GetComponentsInChildren<SkinnedMeshRenderer>();
+            var helmet = skins.Single(r => r.name == helmetName);
+            Assert.IsTrue(helmet.enabled);
+            Assert.IsNotNull(helmet.sharedMesh);
+            if (isSecond)
+            {
+                var eyes = skins.Single(r => r.name == "Kucing Rig | Mata");
+                Assert.IsTrue(eyes.enabled);
+                CollectionAssert.AreEquivalent(new[] { "Kucing_Sclera", "Kucing_Iris", "Kucing_Pupil" },
+                    eyes.sharedMaterials.Select(material => material.name));
+                Assert.IsTrue(eyes.sharedMaterials.All(material => material.GetFloat("_Cull") == 0f),
+                    "The cat must inherit its two-sided eye materials from the imported model");
+            }
         }
+
+        var badak = CheckLevelSurvivors();
+        var start = badak.transform.position;
+        float deadline = Time.time + 8f;
+        while (Vector3.ProjectOnPlane(badak.transform.position - start, Vector3.up).sqrMagnitude < .25f * .25f &&
+               Time.time < deadline)
+            yield return null;
+        Assert.That(Vector3.ProjectOnPlane(badak.transform.position - start, Vector3.up).magnitude,
+            Is.GreaterThanOrEqualTo(.25f), "Badak must move on the authored NavMesh");
+    }
+
+    static Behaviour CheckLevelSurvivors()
+    {
+        var victims = UnityEngine.Object.FindObjectsOfType(T("VictimAI")).Cast<Behaviour>().ToArray();
+        Assert.AreEqual(4, victims.Length);
+        var manager = UnityEngine.Object.FindObjectOfType(T("GameManager"));
+        CollectionAssert.AreEquivalent(victims, (IList)F(manager, "activeVictims"));
+
+        foreach (var victim in victims) Assert.IsTrue(victim.isActiveAndEnabled, victim.name);
+        CollectionAssert.AreEquivalent(new[] { "TupaiSurvivor", "TupaiSurvivor", "TupaiSurvivor", "BadakSurvivor" },
+            victims.Select(victim => victim.GetComponentInChildren<Animator>().runtimeAnimatorController.name));
+        var badak = victims.Single(victim => victim.name == "Badak - Survivor");
+        var agent = badak.GetComponent<UnityEngine.AI.NavMeshAgent>();
+        Assert.IsTrue(agent && agent.enabled && agent.isOnNavMesh, "Badak must bind to the interior NavMesh");
+        var animator = badak.GetComponentInChildren<Animator>();
+        CollectionAssert.AreEquivalent(new[] { "Idle", "Jalan Santai", "Lari Panik", "Sesak lalu Pingsan", "Sadar Kembali" },
+            animator.runtimeAnimatorController.animationClips.Select(clip => clip.name));
+
+        var camera = Camera.main;
+        Assert.NotNull(camera, "The shared gameplay camera must render the initial view for both players");
+        const float margin = .04f;
+        var capsule = badak.GetComponent<CapsuleCollider>();
+        Vector3 head = capsule.bounds.center + Vector3.up * (capsule.bounds.extents.y * .78f);
+        Vector3 viewport = camera.WorldToViewportPoint(head);
+        Assert.Greater(viewport.z, camera.nearClipPlane, "Badak camera depth");
+        Assert.That(viewport.x, Is.InRange(margin, 1f - margin), "Badak horizontal viewport position");
+        Assert.That(viewport.y, Is.InRange(margin, 1f - margin), "Badak vertical viewport position");
+        return badak;
     }
 
     [UnityTest]

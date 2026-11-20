@@ -1,5 +1,60 @@
 ﻿# Project Lessons & Self-Improvement Log
 
+### [2026-11-20] Size Badak Against the Playable Models
+
+- Increased the Badak mesh height from 1.415 m to 1.650 m based on the user's size comparison with the playable characters. The current `Gameloop_IJUN` player models measure 1.474 m for Rubah and 1.522 m for Kucing in Play Mode, including their headgear. Badak is around 8% taller than the taller player model.
+- Used the measured Play Mode pose and a side-by-side render on a common floor. The Badak feet still align with the gameplay capsule baseline. The prefab diff contains only the Badak model's local scale and position. Preserve the authored position of any unsaved scene instance when testing a shared prefab.
+
+### [2026-11-20] Resize Badak and Make Sustained Fire Exposure Fatal
+
+- Increased the Badak model scale by 35% around its ground contact. The idle mesh now measures 1.415 m from feet to top, compared with 1.048 m for Tupai, with both feet aligned to the floor. The survivor prefab still uses the existing gameplay collider and carry attachment.
+- Tupai and Badak now take damage inside active flames and up to 0.9 m beyond the flame collider. Solid obstacles block nearby heat, and the strongest flame determines exposure when multiple fires overlap. The shared prefab uses 30 health before collapse and seven full-heat seconds of additional exposure before death. A downed survivor is eligible for rescue, and a dead survivor stays in the completed collapse pose and cannot be picked up or counted as rescued.
+- Unity job `606b966e4a6e41b6ac32baf323d51b82` passed all four Play Mode scenarios. Tupai died in direct contact with flame, Badak died 0.2 m beyond the trigger, and both retained their fall pose and could no longer be picked up. The safe delivery, gameplay startup and movement, and extinguisher regressions also passed. The final Console showed zero warnings and errors.
+- Keep visual scale independent of the survivor gameplay collider when only the appearance changes. Verify direct contact, proximity beyond the trigger, and safe delivery after collapse as separate gameplay cases.
+
+### [2026-11-20] Add Badak to the Survivor Objective
+
+- Placed one Badak near the entrance in `Gameloop_IJUN` alongside the three existing Tupai. The Badak prefab variant inherits the survivor collider, NavMesh agent, carry attachment, and SafeZone lifecycle. It assigns its own Animator on the imported Badak rig.
+- Kept Badak's authored idle loop, trimmed the walk to frames 12–48 and panic run to frames 13–43, and preserved the complete collapse and recovery clips. The startup check validates the species count, the camera view of Badak, and movement on the baked NavMesh.
+- Unity job `58affda304864db081534aa0586b4202` passed the menu-to-gameplay check and the existing Tupai rescue flow. A separate Play Mode capture showed Badak in the opening player camera with a clear ray to its body, the Panic state active, and its NavMesh agent bound. The Console showed zero warnings and errors.
+
+### [2026-11-20] Navigate the Building with Tupai
+
+- Replaced the tiny local movement box with a NavMesh and complete-path destination choices for the scene's three Tupai. The patrol search extends up to 4 m from its center. Near active fire, a Tupai prefers a reachable direction away from the fire. A stalled route is rechecked and the next attempt can use a different heading.
+- Baked the static interior from floor and wall collision geometry with agent radius 0.36 m, height 1.08 m, climb 0.23 m, and voxel size 0.10 m. Movable furniture and door leaves are represented by runtime carving obstacles so moving them does not leave permanent holes in the bake.
+- In the actual level the agents bound at all three pending placements, traveling 1.35 m, 2.22 m, and 9.00 m during a six-second observation. Unity job 3d4cea2c12a84c5496c6ed5f58777db1 passed the obstacle detour and full rescue flow. Menu and game outcome regressions passed in job 930a339321a346519bd8a0bbff1478a9. The final Console showed zero errors and warnings.
+- Keep the Rigidbody in charge of contact and gravity. The NavMeshAgent provides steering and is suspended during carry, collapse, and recovery. Snapshot pending editor scene edits before a bake or test that reloads the scene.
+
+### [2026-11-20] Put Player 2 and Three Survivors in the Main Gameplay Scene
+
+- `Gameloop_IJUN` assigns a Player prefab variant only to the second slot. The variant attaches the Kucing appearance and inherits the original controller, input, colliders, and IK. The cat's two-sided eye materials follow the source FBX import remaps.
+- Converted the existing Tupai to a shared survivor prefab and placed three instances on clear interior floor tiles near the entrance and office. Checked the settled shared camera after the actual gameplay spawn. The same SafeZone and GameManager count all three.
+- The menu-to-gameplay and independent-movement regressions passed in job `dcb2fc302b814f219cc387f54302dc76`. The updated survivor-flow regression passed in job `4db7f9095843402094263d9739fcff07`. All three Tupai were visible in the actual first camera view, with clear sight lines. The final Console showed zero errors and warnings.
+- A Play Mode fixture that enters through an editor test must record prefab instance property modifications before domain reload. Use a stable authored name to isolate a single victim when testing its complete behavior and verify the full count in the saved scene separately.
+
+### [2026-11-20] Add Tupai as a Rescuable Survivor
+
+- Tupai replaces the existing Victim placeholder in `Gameloop_IJUN`, which is the gameplay scene loaded by MainMenu. The root uses the existing Liftable, guarded placement, and SafeZone workflow. GameManager still counts the same survivor through `isSafe`.
+- The FBX provides five source clips. Idle loops over frames 0–72, walk loops over 24–52 of Diam ke Jalan Santai, and panic loops over 8–23 of Lari Ketakutan. Collapse and recovery use the full one-shot clips.
+- Keep panic proximity separate from exposure. A nearby active fire prompts the survivor to flee. The actual fire trigger applies heat over time. Once down, Tupai stays down while carried and can recover after the player puts it down in the safe zone. The scene places Tupai near the existing BigFire on a clear floor tile.
+- Play Mode at the saved location showed Tupai completing its fall beside BigFire. Unity job `972c1ea472554c19ab47b2d2af9e301e` passed all four checks for the full survivor flow, two rescue outcome cases, and extinguisher behavior. The survivor fixture used the authored SafeZone and guarded placement, isolated the rescue-only objective, and verified that the UI counted the delivery. The final Console check found zero warnings and errors.
+- Measure loop seams in the authored movement cycles. Keep contact and rescue decisions on the gameplay root and presentation in the child Animator.
+
+### [2026-11-20] Restore Visibility of the Cat's Eyes
+
+- The imported FBX and Player 2 showed empty eye sockets in the default render. The eyeballs, iris, and pupils were present. The negatively scaled eye renderer caused back-face culling to hide the visible surface, which made the iris appear reversed when the eye mesh was viewed in isolation.
+- Confirmed the cause by rendering the same pose with and without culling. Remapped just the three eye materials on `Kucing.fbx` to two-sided copies. The material remaps follow the asset through scene reloads and Apply Model, while the eye mesh, head rig, and gameplay animation remain the same.
+- After reopening Unity, both irises and pupils were visible in Play Mode in `AdaptiveAnimation_Demo`. The Unity Test Runner passed the model replacement and pickup with hose IK regressions. The Console showed zero errors and warnings. The editor's local MCP session was active, while the Codex MCP client could not complete its handshake.
+- Inspect a skinned mesh with both face windings before changing its geometry. Compare the imported asset and the applied model under the same pose and camera.
+
+### [2026-11-20] Replace Adaptive Demo Player 2 Appearance
+
+- **Request**: Put the supplied Kucing model on Player 2 while preserving mechanics and animations.
+- **Change**: Applied `Kucing.fbx` to the appearance slot on Player 2 in the active `AdaptiveAnimation_Demo` scene. Used the existing skeleton mirror and fitted the mesh to the original floor height. Set the configured helmet name to the cat's own renderer and kept the existing gameplay Animator, controller, input, collider, and IK. The original FBX and shared Player prefab were preserved.
+- **Verification**: Play Mode keyboard input moved Player 2 by 0.235 m, animated the visible hand, and left Player 1 stationary. Right Ctrl picked up Box_Medium through the existing animation event. The cat's visible hand moved 0.442 m during pickup.
+- **Regression**: Unity job `6dbfe569721741cfa38deaf8c6c16f47` passed both the model replacement and the pickup and hose IK tests. The reopened scene still referenced Kucing for Player 2 and Rubah_P1 for Player 1. The Console returned zero errors and warnings.
+- **Rule**: Apply a scene-specific appearance to its player slot. Verify that the original Animator drives the replacement, and use the model slot's helmet name in tests.
+
 ### [2026-11-18] Resolve Unity Compilation Warnings
 
 - Removed three obsolete VLights checks for `SystemInfo.supportsImageEffects`, which always returns true in this project version. The About window now uses `titleContent`.

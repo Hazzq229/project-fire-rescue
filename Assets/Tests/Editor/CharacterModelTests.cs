@@ -148,8 +148,14 @@ public class CharacterModelTests
                 Assert.AreEqual(Animator.StringToHash("HoseHold"), player.GetComponent<Animator>().GetCurrentAnimatorStateInfo(2).shortNameHash);
             }
         }
-        Assert.AreEqual(2, Object.FindObjectsOfType<SkinnedMeshRenderer>().Count(r => r.enabled && r.name == "Topi_Pemadam"),
-            "Only the two player appearances should render");
+        foreach (var player in new[] { p1, p2 })
+        {
+            var slot = Slot(player);
+            var visual = (GameObject)F(slot, "generatedVisuals");
+            var helmetName = (string)F(slot, "headgearMeshName");
+            Assert.AreEqual(1, visual.GetComponentsInChildren<SkinnedMeshRenderer>()
+                .Count(r => r.enabled && r.name == helmetName), player.name + " must show its configured helmet");
+        }
         CooperativeHoseTests.Capture("Temp/CharacterModel-Hose.png", p1.transform.position + Vector3.up * .4f);
         yield return new ExitPlayMode();
         UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/AdaptiveAnimation_Demo.unity");
