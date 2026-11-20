@@ -239,7 +239,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 8a3ffb6e413eb194ebf00950c57af7df,
         type: 3}
       propertyPath: m_Name
-      value: Props_Toilet_01
+      value: NonCarryProps_Toilet_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

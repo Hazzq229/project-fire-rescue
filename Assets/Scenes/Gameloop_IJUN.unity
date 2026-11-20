@@ -1640,7 +1640,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (3)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2281,7 +2281,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: ee5c52951f1ccae4095388e93507d621,
         type: 3}
       propertyPath: m_Name
-      value: Props_Sign_Female
+      value: NonCarryProps_Sign_Female
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3147,7 +3147,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 267e58002178ec14780e47524ea813df,
         type: 3}
       propertyPath: m_Name
-      value: Props_Sign_Male
+      value: NonCarryProps_Sign_Male
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3701,7 +3701,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (9)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -7672,7 +7672,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (12)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -8304,7 +8304,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (14)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -8783,7 +8783,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (4)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -11505,7 +11505,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (3)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -11696,7 +11696,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 067166a566f266d4eba0f7e50b2eca61,
         type: 3}
       propertyPath: m_Name
-      value: Props_Carpet_01
+      value: NonCarryProps_Carpet_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -12890,7 +12890,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (2)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -13537,7 +13537,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (9)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -14367,7 +14367,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (13)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -15910,7 +15910,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (12)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -16172,7 +16172,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (8)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -16804,7 +16804,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (5)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -21410,7 +21410,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (1)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -27089,7 +27089,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (4)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -28866,7 +28866,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (5)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -31245,7 +31245,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (7)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -31747,7 +31747,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (3)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -32940,7 +32940,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (8)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -38949,7 +38949,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (11)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -41565,7 +41565,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (6)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -41764,7 +41764,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (10)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -43474,7 +43474,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (1)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -44283,7 +44283,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (7)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -45389,7 +45389,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (9)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -46052,30 +46052,6 @@ Transform:
     type: 3}
   m_PrefabInstance: {fileID: 1087590123}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1087655347 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 6955925342216216483, guid: d2cc9d1de337148479b7652c34dd0c18,
-    type: 3}
-  m_PrefabInstance: {fileID: 1314674788}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1087655352
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1087655347}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e56575416d1a524fea0c997d9208d9d1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  type: 0
-  state: 0
-  ignitionPoint: 93.9
-  burningPoint: 60
-  firePrefab: {fileID: 8179677174226484149, guid: b35d065ce049f794fb4fee96a2a5863d,
-    type: 3}
 --- !u!1001 &1087985397
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -46834,7 +46810,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 458e98fec1297724d9684b8411bc8ff4,
         type: 3}
       propertyPath: m_Name
-      value: Props_Sign_CEO
+      value: NonCarryProps_Sign_CEO
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -47958,7 +47934,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (10)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -48927,7 +48903,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (11)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -49508,7 +49484,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (2)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -54682,7 +54658,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (5)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -56309,7 +56285,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (12)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -56738,7 +56714,7 @@ PrefabInstance:
     - target: {fileID: 8091714929223672368, guid: d2cc9d1de337148479b7652c34dd0c18,
         type: 3}
       propertyPath: m_Name
-      value: Props_Toilet_01
+      value: NonCarryProps_Toilet_01
       objectReference: {fileID: 0}
     - target: {fileID: 8863184636120561802, guid: d2cc9d1de337148479b7652c34dd0c18,
         type: 3}
@@ -56793,11 +56769,7 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 6955925342216216483, guid: d2cc9d1de337148479b7652c34dd0c18,
-        type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1087655352}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d2cc9d1de337148479b7652c34dd0c18, type: 3}
 --- !u!4 &1314674789 stripped
 Transform:
@@ -59113,7 +59085,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (7)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -60056,7 +60028,7 @@ PrefabInstance:
     - target: {fileID: 1056399986784703559, guid: 7cde125e0b15051458d236e35d2c6f13,
         type: 3}
       propertyPath: m_Name
-      value: Props_Toilet_02
+      value: NonCarryProps_Toilet_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -60972,7 +60944,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -66395,7 +66367,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (1)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -67272,7 +67244,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (6)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -68930,7 +68902,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: d70456fbb58d2c14cbaaf863e92a62d6,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_03 (2)
+      value: NonCarryProps_Paper_03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -69098,7 +69070,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (10)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -70822,7 +70794,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01 (11)
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -72328,7 +72300,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (6)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -72853,7 +72825,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (8)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -77191,7 +77163,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02 (4)
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -79674,7 +79646,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 5f62ae01094db584d8ee0c732856a8fc,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_01
+      value: NonCarryProps_Paper_01
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -83372,7 +83344,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: bfd74801d6c14e54ebf6bf1db3d3a305,
         type: 3}
       propertyPath: m_Name
-      value: Props_Sign_Meeting
+      value: NonCarryProps_Sign_Meeting
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -88494,7 +88466,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: c85458bebeeaca34cb4903a47ae6a7b4,
         type: 3}
       propertyPath: m_Name
-      value: Props_Sign_Storage
+      value: NonCarryProps_Sign_Storage
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -90300,7 +90272,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: e5dc0e5e7a9eb2744b382d7133783eab,
         type: 3}
       propertyPath: m_Name
-      value: Props_Paper_02
+      value: NonCarryProps_Paper_02
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
